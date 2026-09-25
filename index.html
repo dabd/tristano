@@ -105,10 +105,20 @@ summary{font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;padding
 summary::-webkit-details-marker{display:none}
 summary::after{content:" +"}
 details[open] summary::after{content:" −"}
-.edit{display:grid;grid-template-columns:96px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
+.edit{display:grid;grid-template-columns:96px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;margin-top:8px}
 .edit .lab{font-size:14px;color:var(--muted)}
 .small{min-height:44px;border-radius:12px;border:1.5px solid var(--line);font-size:14px;font-weight:600}
 .small.danger{color:var(--danger);grid-column:2 / span 2}
+.edit .wide{grid-column:2 / span 2}
+.swatches{display:flex;flex-wrap:wrap;gap:8px}
+.swatches button{width:34px;height:34px;border-radius:17px;border:3px solid transparent;box-shadow:inset 0 0 0 2px var(--paper)}
+.swatches button[aria-checked="true"]{border-color:var(--ink)}
+.swatches button:disabled{opacity:.35}
+#noteIn{box-sizing:border-box;width:100%;min-height:44px;font:inherit;font-size:15px;background:var(--panel);color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:8px;resize:vertical}
+.pnote{margin:6px 0 0;max-width:22em;font-size:15px;font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#stage.sing .pnote{opacity:.85}
+#stage.short .pnote{-webkit-line-clamp:1}
+#stage.tiny .pnote{display:none}  /* e.g. drawer open: its Note box shows the text */
 #notice{font-size:13px;color:var(--muted);margin:0}
 #notice.warn{color:var(--danger)}
 
@@ -148,17 +158,17 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
     <canvas id="wf"></canvas>
     <div class="hud">
       <div class="hud-top">
-        <div class="phrase"><b id="pn">1</b><span id="pt">of 1</span></div>
+        <div><div class="phrase"><b id="pn">1</b><span id="pt">of 1</span></div><p class="pnote" id="pnote"></p></div>
         <div class="word" id="word" aria-live="polite">Paused</div>
       </div>
       <div class="times"><span id="tNow">0:00.0</span><span id="tLen"></span></div>
     </div>
     <div id="drain"><i id="drainBar"></i></div>
-    <button id="mdel" type="button" hidden>Delete marker</button>
+    <button id="mdel" type="button" hidden>Delete phrase</button>
 
     <div id="empty">
       <h2>Learn a solo one phrase at a time.</h2>
-      <p>Open a track, tap Mark at each breath, then loop a phrase and sing it back in the gap. The file stays on this device. Nothing is uploaded.</p>
+      <p>Open a track, tap Mark at the start and again at the end of each phrase, then loop a phrase and sing it back in the gap. The file stays on this device. Nothing is uploaded.</p>
       <button class="primary" id="openBtn" type="button">Open audio file</button>
       <div class="stored" id="storedList" hidden></div>
     </div>
@@ -174,8 +184,8 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
         <svg viewBox="0 0 24 24" id="playIcon"><path d="M7 4v16l13-8z"/></svg></button>
       <button class="tbtn" id="next" type="button" title="Next phrase (→)">
         <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>Phrase</button>
-      <button class="tbtn" id="mark" type="button" title="Drop a marker at the playhead (M)">
-        <svg viewBox="0 0 24 24"><path d="M6 3h2v18H6zM9 4h10l-3 4 3 4H9z"/></svg>Mark</button>
+      <button class="tbtn" id="mark" type="button" title="Mark the start, then the end, of a phrase (M)">
+        <svg viewBox="0 0 24 24"><path d="M6 3h2v18H6zM9 4h10l-3 4 3 4H9z"/></svg><span id="markLab">Mark</span></button>
     </div>
 
     <div class="row"><span class="lab" id="speedLab">Speed</span>
@@ -186,7 +196,7 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
       <div class="seg" id="loop" role="radiogroup" aria-labelledby="loopLab"></div></div>
 
     <details id="editBox">
-      <summary>Fine-tune markers</summary>
+      <summary>Edit phrase</summary>
       <div class="edit">
         <span class="lab">Start</span>
         <button class="small" data-nudge="start,-0.05" type="button">Earlier 50 ms</button>
@@ -194,11 +204,14 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
         <span class="lab">End</span>
         <button class="small" data-nudge="end,-0.05" type="button">Earlier 50 ms</button>
         <button class="small" data-nudge="end,0.05" type="button">Later 50 ms</button>
+        <span class="lab">Colour</span>
+        <div class="swatches wide" id="swatches" role="radiogroup" aria-label="Phrase colour"></div>
+        <label class="lab" for="noteIn">Note</label>
+        <textarea class="wide" id="noteIn" rows="2" placeholder="e.g. bar 5, bebop lick into the bridge"></textarea>
         <span class="lab">Remove</span>
-        <button class="small danger" id="delMark" type="button" style="grid-column:auto">Start marker</button>
-        <button class="small danger" id="delEnd" type="button" style="grid-column:auto">End marker</button>
+        <button class="small danger" id="delPhrase" type="button">This phrase</button>
         <span class="lab"></span>
-        <button class="small danger" id="delAll" type="button">Clear all markers</button>
+        <button class="small danger" id="delAll" type="button">Clear all phrases</button>
       </div>
     </details>
     <p id="notice" hidden></p>
@@ -211,14 +224,14 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
     <ul id="trackList"></ul>
     <div class="acts">
       <button class="pill" id="openBtn2" type="button">Open audio file</button>
-      <button class="pill" id="importBtn" type="button">Import markers</button>
-      <button class="pill" id="exportBtn" type="button">Export markers</button>
+      <button class="pill" id="importBtn" type="button">Import phrases</button>
+      <button class="pill" id="exportBtn" type="button">Export phrases</button>
       <button class="pill" id="closeSheet" type="button">Close</button>
     </div>
-    <textarea id="exportText" hidden readonly aria-label="Markers as JSON"></textarea>
+    <textarea id="exportText" hidden readonly aria-label="Phrases as JSON"></textarea>
     <p id="sheetNote"></p>
     <p id="storeNote"></p>
-    <p>Keys: <kbd>Space</kbd> play, <kbd>←</kbd> <kbd>→</kbd> phrase, <kbd>R</kbd> restart, <kbd>M</kbd> mark, <kbd>B</kbd> back 3 s, <kbd>L</kbd> loop, <kbd>−</kbd> <kbd>=</kbd> speed.</p>
+    <p>Keys: <kbd>Space</kbd> play, <kbd>←</kbd> <kbd>→</kbd> phrase, <kbd>R</kbd> restart, <kbd>M</kbd> mark start/end, <kbd>Esc</kbd> cancel, <kbd>B</kbd> back 3 s, <kbd>L</kbd> loop, <kbd>−</kbd> <kbd>=</kbd> speed.</p>
   </div>
 </dialog>
 
@@ -234,15 +247,18 @@ const SPEEDS = [0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0
 const GAPS = [[0,"Off"],[0.5,"½×"],[1,"1×"],[1.5,"1½×"],[2,"2×"]];
 const MIN_SEP = 0.25;            // minimum distance between markers, seconds
 const REACTION = 0.15;           // seconds of tap lag compensated when marking during playback
+// Phrase colours, stored as an index so the palette can change without touching saved data.
+const PAL = ["#D9822B","#2E86DE","#C2417A","#2FA37A","#8A63D2","#B8901A","#D64541","#3AA6B9"];
 
 const S = {
   track:null,        // {key,name,size}
   dur:0, peaks:null, peakMax:1,
-  markers:[], updatedAt:0,
+  phrases:[], updatedAt:0,   // [{start,end,color,note}] sorted by start, never overlapping (neighbours may touch)
+  pending:null,              // start time of a phrase being marked (first Mark tap), or null
   phrase:0, loop:true, loopPref:true, rate:1, gapMul:1,
   state:"idle",      // idle | paused | listen | sing
   gapStart:0, gapLen:0,
-  fallback:false, sel:-1, dragWin:null
+  fallback:false, sel:null, dragWin:null   // sel: {i,edge:"s"|"e"} handle picked on the waveform
 };
 
 /* ---------- small helpers ---------- */
@@ -375,10 +391,48 @@ function computePeaks(ab){
 }
 
 /* ---------- phrases ---------- */
-function bounds(){ return [0].concat(S.markers,[S.dur]); }
-function phraseCount(){ return S.markers.length+1; }
-function phraseAt(t){ const m=S.markers; let i=0; while(i<m.length && m[i]<=t+0.001) i++; return i; }
-function phraseSpan(i){ const b=bounds(); i=clamp(i,0,b.length-2); return [b[i],b[i+1]]; }
+// With no phrases the whole track acts as one phrase, so play and loop still work.
+function phraseCount(){ return S.phrases.length; }
+function phraseSpan(i){ const P=S.phrases; if(!P.length) return [0,S.dur]; const p=P[clamp(i,0,P.length-1)]; return [p.start,p.end]; }
+function phraseAt(t){ const P=S.phrases; let i=0; while(i+1<P.length && P[i+1].start<=t+0.001) i++; return i; }  // last phrase started by t
+function insideAt(t){ return S.phrases.findIndex(p=>t>p.start+0.001&&t<p.end-0.001); }
+function cur(){ return S.phrases[S.phrase]||null; }
+function colorOf(p){ return PAL[((p.color|0)%PAL.length+PAL.length)%PAL.length]; }
+function autoColor(i){ // colour for a phrase inserted at index i: next in the cycle after the previous one, unlike both neighbours
+  const P=S.phrases, prev=P[i-1], next=P[i]; let c=prev?(prev.color+1)%PAL.length:0;
+  while((prev&&c===prev.color)||(next&&c===next.color)) c=(c+1)%PAL.length; return c; }
+function r3(v){ return Math.round(v*1000)/1000; }
+function cleanPhrases(arr,dur){
+  if(!Array.isArray(arr)) return [];
+  const out=[];
+  arr.filter(p=>p&&typeof p==="object")
+    .map(p=>({start:Number(p.start),end:Number(p.end),color:Number.isInteger(p.color)?p.color:-1,note:typeof p.note==="string"?p.note.slice(0,2000):""}))
+    .filter(p=>isFinite(p.start)&&isFinite(p.end)&&p.start>=0&&p.end<=dur+0.001&&p.end-p.start>=MIN_SEP)
+    .sort((a,b)=>a.start-b.start)
+    .forEach(p=>{ const prev=out[out.length-1]; if(prev&&p.start<prev.end-0.001) return;  // drop overlaps
+      p.start=r3(p.start); p.end=r3(Math.min(p.end,dur));
+      if(p.color<0||p.color>=PAL.length) p.color=prev?(prev.color+1)%PAL.length:0; out.push(p); });
+  return out;
+}
+// v1 data was a list of split points; they become back-to-back phrases covering the whole track.
+function markersToPhrases(markers,dur){
+  if(!Array.isArray(markers)||!(dur>0)||!isFinite(dur)) return [];
+  const m=markers.map(Number).filter(v=>isFinite(v)&&v>=MIN_SEP&&v<=dur-MIN_SEP).sort((a,b)=>a-b);
+  if(!m.length) return [];
+  const b=[0,...m,dur]; return cleanPhrases(b.slice(0,-1).map((s,i)=>({start:s,end:b[i+1],color:i%PAL.length})),dur);
+}
+// Per-track record in localStorage "pl:p:<key>": {phrases,updatedAt,name,size,duration}.
+// The first read of a track that only has v1 "pl:m:<key>" markers converts them (pl:m is left as a backup).
+function readPhrases(key,dur){
+  const rec=ls("pl:p:"+key); if(rec) return {phrases:cleanPhrases(rec.phrases,dur||Infinity),updatedAt:rec.updatedAt||0};
+  const old=ls("pl:m:"+key), P=old?markersToPhrases(old.markers,dur):[];
+  if(P.length){ const r={phrases:P,updatedAt:old.updatedAt||0}; ls("pl:p:"+key,Object.assign({},r,S.track&&S.track.key===key?{name:S.track.name,size:S.track.size,duration:dur}:{})); return r; }
+  return {phrases:[],updatedAt:0};
+}
+function storedPhraseCount(key){
+  const rec=ls("pl:p:"+key); if(rec&&Array.isArray(rec.phrases)) return rec.phrases.length;
+  const old=ls("pl:m:"+key); return old&&Array.isArray(old.markers)&&old.markers.length ? old.markers.length+1 : 0;
+}
 
 /* ---------- loading a track ---------- */
 async function loadFile(file){
@@ -391,11 +445,10 @@ async function loadStored(key){
   await loadTrack(meta,a.buf,meta.peaks||null,false); return true;
 }
 async function loadTrack(meta,buf,cachedPeaks,isNew){
-  stopAll(); note("");
+  flushNote(); stopAll(); note("");
   if(eng===waEngine){ waEngine.stopNode(); waEngine.buf=null; try{waEngine.ctx.close();}catch(e){} eng=elEngine; S.fallback=false; }
   S.track={key:meta.key,name:meta.name,size:meta.size}; fileBuf=buf; fileType=meta.type||""; srcMode="blob";
-  S.peaks=null; S.dur=meta.dur||0; S.phrase=0; S.sel=-1;
-  const saved=ls("pl:m:"+meta.key); S.markers=saved?cleanMarkers(saved.markers,Infinity):[]; S.updatedAt=saved?saved.updatedAt||0:0;
+  S.peaks=null; S.dur=meta.dur||0; S.phrase=0; S.sel=null; S.pending=null; S.phrases=[]; S.updatedAt=0;
   $("title").textContent=meta.name.replace(/\.[a-z0-9]{2,5}$/i,"");
   $("empty").hidden=true; setState("paused"); $("word").textContent="Reading file…"; refresh();
   await setSrc(); eng.setRate(S.rate);
@@ -403,11 +456,11 @@ async function loadTrack(meta,buf,cachedPeaks,isNew){
   if(cachedPeaks){ S.peaks={mn:new Float32Array(cachedPeaks.mn),mx:new Float32Array(cachedPeaks.mx),peak:cachedPeaks.peak}; }
   else{
     try{ const ab=await decode(buf,[8000,22050,44100]); S.dur=ab.duration; S.peaks=computePeaks(ab); }
-    catch(e){ note("Couldn't draw the waveform for this file. Playback and markers still work."); }
+    catch(e){ note("Couldn't draw the waveform for this file. Playback and phrases still work."); }
   }
   if(!S.dur && isFinite(audio.duration)) S.dur=audio.duration;
-  S.markers=cleanMarkers(S.markers,S.dur);
-  S.loop = S.markers.length ? S.loopPref : false; syncSeg("loop",S.loop?"1":"0");
+  ({phrases:S.phrases,updatedAt:S.updatedAt}=readPhrases(meta.key,S.dur));
+  S.loop = S.phrases.length ? S.loopPref : false; syncSeg("loop",S.loop?"1":"0");
   $("word").textContent="Paused";
   ovDirty=true; refresh();
 
@@ -423,17 +476,11 @@ async function loadTrack(meta,buf,cachedPeaks,isNew){
   if("mediaSession" in navigator){ try{ navigator.mediaSession.metadata=new MediaMetadata({title:$("title").textContent,artist:"Tristano"}); }catch(e){} }
 }
 function unloadTrack(){
-  stopAll();
-  S.track=null; S.peaks=null; S.dur=0; S.markers=[]; S.phrase=0; S.state="idle"; fileBuf=null;
+  flushNote(); stopAll();
+  S.track=null; S.peaks=null; S.dur=0; S.phrases=[]; S.pending=null; S.sel=null; S.phrase=0; S.state="idle"; fileBuf=null;
   audio.removeAttribute("src"); try{audio.load();}catch(e){} if(blobUrl){ URL.revokeObjectURL(blobUrl); blobUrl=null; }
   const st=ls("pl:settings")||{}; delete st.lastKey; ls("pl:settings",st);
   $("title").textContent="Tristano"; $("empty").hidden=false; $("storedList").hidden=true; ovDirty=true; refresh();
-}
-function cleanMarkers(arr,dur){
-  if(!Array.isArray(arr)) return [];
-  const out=[]; arr.map(Number).filter(v=>isFinite(v)&&v>=MIN_SEP&&v<=dur-MIN_SEP).sort((a,b)=>a-b)
-    .forEach(v=>{ if(!out.length||v-out[out.length-1]>=MIN_SEP) out.push(Math.round(v*1000)/1000); });
-  return out;
 }
 
 /* ---------- transport ---------- */
@@ -467,7 +514,7 @@ function startPlay(){
 function toggle(){ if(!S.track) return; if(S.state==="listen"||S.state==="sing"){ eng.pause(); setState("paused"); } else startPlay(); }
 function goPhrase(i,forcePlay){
   if(!S.track) return;
-  i=clamp(i,0,phraseCount()-1); S.phrase=i; S.sel=-1; const [a]=phraseSpan(i); eng.seek(a);
+  i=clamp(i,0,Math.max(0,phraseCount()-1)); S.phrase=i; S.sel=null; const [a]=phraseSpan(i); eng.seek(a);
   if(S.state==="sing"||forcePlay){ startPlay(); } else refresh();
 }
 function backThree(){ if(!S.track) return; const t=Math.max(0,eng.time()-3*S.rate); if(S.state==="sing"){ setState("paused"); } eng.seek(t); S.phrase=phraseAt(t); refresh(); }
@@ -483,27 +530,59 @@ function showRate(){ $("spVal").textContent=Math.round(S.rate*100)+"%"; $("spDow
 function stepRate(d){ const i=clamp(SPEEDS.indexOf(S.rate)+d,0,SPEEDS.length-1); setRate(SPEEDS[i]); }
 function setLoop(on){ S.loop=S.loopPref=!!on; syncSeg("loop",on?"1":"0"); if(S.track){ S.phrase=phraseAt(eng.time()); if(S.state==="sing"&&!on) startPlay(); } saveSettings(); refresh(); }
 
-/* ---------- markers ---------- */
-function markersChanged(){
-  S.updatedAt=Date.now(); ls("pl:m:"+S.track.key,{markers:S.markers,updatedAt:S.updatedAt});
+/* ---------- editing phrases ---------- */
+// Single write path for phrases: saves the track's record and redraws.
+function phrasesChanged(){
+  S.updatedAt=Date.now();
+  ls("pl:p:"+S.track.key,{phrases:S.phrases,updatedAt:S.updatedAt,name:S.track.name,size:S.track.size,duration:S.dur});
   ovDirty=true; refresh();
 }
+function markTime(){ let t=eng.time(); if(S.state==="listen") t-=REACTION*S.rate; return r3(clamp(t,0,S.dur)); } // 150 ms of real tap lag = 150 ms × rate of track time
+// First tap marks a start, second tap an end. Tapping at a point before the pending start restarts it.
 function addMarker(){
   if(!S.track||S.state==="sing") return;
-  let t=eng.time(); if(S.state==="listen") t-=REACTION*S.rate; // real 150 ms of tap lag = 150 ms × rate of track time
-  if(t<MIN_SEP||t>S.dur-MIN_SEP) return;
-  if(S.markers.some(m=>Math.abs(m-t)<MIN_SEP)){ note("There's already a marker here."); return; }
-  note(""); S.markers.push(Math.round(t*1000)/1000); S.markers.sort((a,b)=>a-b);
-  S.phrase=phraseAt(eng.time()); markersChanged();
+  const t=markTime(), P=S.phrases;
+  if(S.pending!==null&&t<S.pending){ S.pending=null; }
+  if(S.pending===null){
+    // a start just after a phrase's end snaps to it, so phrases marked breath by breath stay joined
+    const ends=P.map(p=>p.end).filter(e=>e<=t+0.001&&t-e<MIN_SEP), s=ends.length?ends[ends.length-1]:t, k=insideAt(s);
+    if(k>=0){ note("That's inside phrase "+(k+1)+"."+(S.loop?" Turn Loop off to reach the gaps.":" Mark new phrases in a gap.")); return; }
+    if(s>S.dur-MIN_SEP) return;
+    S.pending=s; note(""); refresh(); return;
+  }
+  const s=S.pending; if(t<s+MIN_SEP){ note("Too short. Tap Mark again at the end of the phrase."); return; }
+  const i=P.findIndex(p=>p.start>=s-0.001), nx=P[i]; let e=t, clipped=false;
+  if(nx&&e>nx.start){ e=nx.start; clipped=true; }
+  S.pending=null;
+  if(e-s<MIN_SEP){ note("No room before phrase "+(i+1)+"."); refresh(); return; }
+  const at=i<0?P.length:i;
+  P.splice(at,0,{start:s,end:r3(e),color:autoColor(at),note:""}); S.phrase=at; S.sel=null;
+  note(clipped?"Ended where phrase "+(at+2)+" starts.":""); phrasesChanged();
+}
+function cancelPending(){ if(S.pending===null) return false; S.pending=null; note(""); refresh(); return true; }
+// Move one edge of phrase i. An edge shared with a touching neighbour moves both phrases.
+function moveEdge(i,edge,t){
+  const P=S.phrases, p=P[i]; if(!p) return;
+  if(edge==="s"){ const pv=P[i-1], linked=pv&&Math.abs(pv.end-p.start)<0.002;
+    const v=r3(clamp(t, pv?(linked?pv.start+MIN_SEP:pv.end):0, p.end-MIN_SEP)); p.start=v; if(linked) pv.end=v; }
+  else { const nx=P[i+1], linked=nx&&Math.abs(nx.start-p.end)<0.002;
+    const v=r3(clamp(t, p.start+MIN_SEP, nx?(linked?nx.end-MIN_SEP:nx.start):S.dur)); p.end=v; if(linked) nx.start=v; }
 }
 function nudge(which,d){
-  if(!S.track) return; const idx = which==="start" ? S.phrase-1 : S.phrase; if(idx<0||idx>=S.markers.length) return;
-  const lo=(idx>0?S.markers[idx-1]:0)+MIN_SEP, hi=(idx<S.markers.length-1?S.markers[idx+1]:S.dur)-MIN_SEP;
-  S.markers[idx]=Math.round(clamp(S.markers[idx]+d,lo,hi)*1000)/1000; markersChanged();
+  const p=cur(); if(!S.track||!p) return;
+  if(which==="start") moveEdge(S.phrase,"s",p.start+d); else moveEdge(S.phrase,"e",p.end+d);
+  phrasesChanged();
 }
-function removeMarker(idx){ if(!S.track||idx<0||idx>=S.markers.length) return; S.sel=-1; S.markers.splice(idx,1); S.phrase=clamp(phraseAt(eng.time()),0,phraseCount()-1); markersChanged(); note("Marker removed."); }
-function removeStart(){ removeMarker(S.phrase-1); }
-function removeEnd(){ removeMarker(S.phrase); }
+function removePhrase(i){
+  if(!S.track||i<0||i>=S.phrases.length) return;
+  S.sel=null; S.phrases.splice(i,1); S.phrase=clamp(phraseAt(eng.time()),0,Math.max(0,S.phrases.length-1));
+  if(!S.phrases.length) setLoop(false);
+  phrasesChanged(); note("Phrase removed.");
+}
+function setColor(c){ const p=cur(); if(!p) return; p.color=c; phrasesChanged(); }
+let noteTimer=0;
+function saveNoteSoon(){ clearTimeout(noteTimer); noteTimer=setTimeout(flushNote,400); }
+function flushNote(){ if(!noteTimer) return; clearTimeout(noteTimer); noteTimer=0; if(S.track) phrasesChanged(); }  // call before switching tracks
 
 /* ---------- drawing ---------- */
 const wf=$("wf"), ov=$("ov"); let ovCache=null, ovDirty=true, colors={}, rafId=0, dirty=true;
@@ -523,25 +602,38 @@ function windowSpan(){
 function drawMain(){
   const d=fit(wf), g=wf.getContext("2d"), W=wf.width, H=wf.height; g.clearRect(0,0,W,H);
   if(!S.track||!S.dur) return;
-  const sing=S.state==="sing", [w0,w1]=windowSpan(), [a,b]=phraseSpan(S.phrase), t=eng.time();
-  const top=Math.min(H*0.42,92*d), bot=Math.min(H*0.2,40*d), mid=top+(H-top-bot)/2, amp=(H-top-bot)/2*0.88, x=s=>(s-w0)/(w1-w0)*W;
+  const sing=S.state==="sing", [w0,w1]=windowSpan(), [a,b]=phraseSpan(S.phrase), t=eng.time(), P=S.phrases, c=cur();
+  // keep the waveform below the phrase number and note, and the handles above the times row
+  const hudBottom=$("pnote").getBoundingClientRect().bottom-wf.getBoundingClientRect().top;
+  const top=Math.min(H*0.55,Math.max(Math.min(H*0.42,92*d),(hudBottom+8)*d)), bot=Math.min(H*0.3,58*d), mid=top+(H-top-bot)/2, amp=(H-top-bot)/2*0.88, x=s=>(s-w0)/(w1-w0)*W;
+  const inView=P.map((p,i)=>i).filter(i=>P[i].end>w0&&P[i].start<w1);
+  // faint band behind each phrase in its colour
+  if(!sing) inView.forEach(i=>{ const p=P[i]; g.globalAlpha=i===S.phrase?0.16:0.09; g.fillStyle=colorOf(p);
+    g.fillRect(x(p.start),mid-amp-6*d,x(p.end)-x(p.start),amp*2+12*d); });
+  g.globalAlpha=1;
   const step=3*d, bar=2*d, n=Math.floor(W/step);
   for(let i=0;i<n;i++){
-    const s0=w0+(i*step)/W*(w1-w0), s1=w0+((i+1)*step)/W*(w1-w0), inside=s0>=a&&s0<b;
+    const s0=w0+(i*step)/W*(w1-w0), s1=w0+((i+1)*step)/W*(w1-w0), inCur=s0>=a&&s0<b;
     let lo=-0.02,hi=0.02; if(S.peaks){ [lo,hi]=column(s0,s1); }
-    g.fillStyle = sing ? colors["on-sing"] : inside ? (s0<=t?colors.ink:colors.brass) : colors.wave;
-    g.globalAlpha = sing ? (inside?0.38:0.16) : 1;
+    let other=null; if(!inCur) for(const k of inView){ if(s0>=P[k].start&&s0<P[k].end){ other=P[k]; break; } }
+    g.fillStyle = sing ? colors["on-sing"] : inCur ? (s0<=t?colors.ink:(c?colorOf(c):colors.brass)) : other ? colorOf(other) : colors.wave;
+    g.globalAlpha = sing ? (inCur?0.38:0.16) : other ? 0.55 : 1;
     const y0=mid-Math.max(hi,0.015)*amp, y1=mid-Math.min(lo,-0.015)*amp; g.fillRect(i*step,y0,bar,Math.max(d,y1-y0));
   }
   g.globalAlpha=1;
-  // phrase edges
-  g.fillStyle=sing?colors["on-sing"]:colors.brass; [a,b].forEach(m=>{ if(m>w0&&m<w1) g.fillRect(Math.round(x(m))-d,mid-amp-6*d,2*d,amp*2+12*d); });
-  // other markers in view
-  g.globalAlpha=0.5; S.markers.forEach(m=>{ if(m!==a&&m!==b&&m>w0&&m<w1) g.fillRect(Math.round(x(m)),mid-amp,d,amp*2); }); g.globalAlpha=1;
-  // drag handles
-  S.markers.forEach((m,i)=>{ if(m<=w0||m>=w1) return; const cx=Math.round(x(m)), sel=i===S.sel, r=(sel?9:6)*d, cy=mid+amp+6*d+r;
-    if(sel){ g.fillStyle=sing?colors["on-sing"]:colors.ink; g.fillRect(cx-1.5*d,mid-amp-6*d,3*d,amp*2+12*d); }
-    g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2); g.fillStyle=sing?colors["on-sing"]:(sel?colors.ink:colors.brass); g.fill(); });
+  // phrase edges and drag handles: start = filled dot, end = ring, both in the phrase's colour
+  inView.forEach(i=>{ const p=P[i], col=sing?colors["on-sing"]:colorOf(p), isCur=i===S.phrase;
+    [["s",p.start],["e",p.end]].forEach(([edge,m])=>{ if(m<w0||m>w1) return;
+      const cx=Math.round(x(m)), sel=S.sel&&S.sel.i===i&&S.sel.edge===edge, r=(sel?9:6)*d, cy=mid+amp+8*d+6*d, ex=edge==="s"?cx+r*0.7:cx-r*0.7;
+      g.globalAlpha=isCur||sel?1:0.7; g.fillStyle=sel?(sing?colors["on-sing"]:colors.ink):col;
+      g.fillRect(cx-(sel?1.5:1)*d,mid-amp-6*d,(sel?3:2)*d,amp*2+12*d);
+      g.beginPath(); g.arc(ex,cy,r,0,Math.PI*2);
+      if(edge==="s"){ g.fill(); } else { g.lineWidth=2.5*d; g.strokeStyle=g.fillStyle; g.beginPath(); g.arc(ex,cy,r-1.25*d,0,Math.PI*2); g.stroke(); } });
+  });
+  g.globalAlpha=1;
+  // a start waiting for its end: dashed line
+  if(S.pending!==null&&S.pending>=w0&&S.pending<=w1){ const px=Math.round(x(S.pending)); g.strokeStyle=sing?colors["on-sing"]:colors.ink; g.lineWidth=2*d;
+    g.setLineDash([5*d,4*d]); g.beginPath(); g.moveTo(px,mid-amp-6*d); g.lineTo(px,mid+amp+6*d); g.stroke(); g.setLineDash([]); }
   // playhead
   if(!sing&&t>=w0&&t<=w1){ g.fillStyle=colors.ink; g.fillRect(Math.round(x(t))-d,mid-amp-10*d,2*d,amp*2+20*d); }
 }
@@ -551,30 +643,36 @@ function drawOverview(){
     ovCache=document.createElement("canvas"); ovCache.width=W; ovCache.height=H; const c=ovCache.getContext("2d");
     c.fillStyle=colors.paper; c.fillRect(0,0,W,H);
     if(S.track&&S.dur){
-      c.fillStyle=colors.wave; const mid=H/2, amp=H*0.42;
+      S.phrases.forEach(p=>{ c.globalAlpha=0.35; c.fillStyle=colorOf(p); c.fillRect(p.start/S.dur*W,0,Math.max(d,(p.end-p.start)/S.dur*W),H); });
+      c.globalAlpha=1; c.fillStyle=colors.wave; const mid=H/2, amp=H*0.42;
       for(let px=0;px<W;px+=d){ let lo=-0.03,hi=0.03; if(S.peaks){ [lo,hi]=column(px/W*S.dur,(px+d)/W*S.dur); }
         c.fillRect(px,mid-hi*amp,d,Math.max(d,(hi-lo)*amp)); }
-      c.fillStyle=colors.brass; S.markers.forEach(m=>c.fillRect(Math.round(m/S.dur*W),0,Math.max(1,d),H));
+      S.phrases.forEach(p=>{ c.fillStyle=colorOf(p); c.fillRect(Math.round(p.start/S.dur*W),0,Math.max(1,d),H); c.fillRect(Math.round(p.end/S.dur*W)-Math.max(1,d),0,Math.max(1,d),H); });
     }
     ovDirty=false;
   }
   g.clearRect(0,0,W,H); g.drawImage(ovCache,0,0);
   if(!S.track||!S.dur) return;
-  const [a,b]=phraseSpan(S.phrase); g.globalAlpha=0.28; g.fillStyle=colors.brass; g.fillRect(a/S.dur*W,0,Math.max(2*d,(b-a)/S.dur*W),H); g.globalAlpha=1;
+  const [a,b]=phraseSpan(S.phrase), c=cur(); g.fillStyle=c?colorOf(c):colors.brass; g.fillRect(a/S.dur*W,H-4*d,Math.max(2*d,(b-a)/S.dur*W),4*d);  // current phrase: bar along the bottom
   g.fillStyle=colors.ink; g.fillRect(Math.round(eng.time()/S.dur*W)-d,0,2*d,H);
 }
 function updateHud(){
   const has=!!S.track; ["back","prev","play","next","mark"].forEach(id=>$(id).disabled=!has);
   if(!has){ $("mdel").hidden=true; return; }
-  const [a,b]=phraseSpan(S.phrase);
-  { const chip=$("mdel"), m=S.markers[S.sel], [w0,w1]=windowSpan(), W=$("stage").clientWidth;
-    if(S.sel>=0&&m!==undefined&&m>w0&&m<w1){ chip.hidden=false; const cw=chip.offsetWidth||120; chip.style.left=clamp((m-w0)/(w1-w0)*W-cw/2,8,W-cw-8)+"px"; }
+  const [a,b]=phraseSpan(S.phrase), c=cur(), n=phraseCount();
+  { const chip=$("mdel"), p=S.sel&&S.phrases[S.sel.i], m=p&&(S.sel.edge==="s"?p.start:p.end), [w0,w1]=windowSpan(), W=$("stage").clientWidth;
+    if(p&&m>=w0&&m<=w1){ chip.hidden=false; const cw=chip.offsetWidth||120; chip.style.left=clamp((m-w0)/(w1-w0)*W-cw/2,8,W-cw-8)+"px"; }
     else chip.hidden=true; }
-  $("pn").textContent=S.phrase+1; $("pt").textContent="of "+phraseCount();
+  $("markLab").textContent = S.pending!==null ? "End" : "Mark";
+  $("pn").textContent = n ? S.phrase+1 : "-"; $("pt").textContent = "of "+n;
+  $("pn").style.color = c&&S.state!=="sing" ? colorOf(c) : "";
+  $("pnote").textContent = c ? c.note : ""; { const h=$("stage").clientHeight; $("stage").classList.toggle("short",h<300); $("stage").classList.toggle("tiny",h<220); }
   $("tNow").textContent=fmt(eng.time())+" / "+fmt(S.dur);
-  $("tLen").textContent = S.markers.length ? "phrase "+(b-a).toFixed(1)+" s" : "no markers yet";
-  $("delMark").disabled=S.phrase<1; $("delEnd").disabled=S.phrase>=S.markers.length; $("delAll").disabled=!S.markers.length;
-  document.querySelectorAll("[data-nudge]").forEach(bn=>{ const w=bn.dataset.nudge.split(",")[0]; bn.disabled = w==="start"?S.phrase<1:S.phrase>=S.markers.length; });
+  $("tLen").textContent = S.pending!==null ? "start at "+fmt(S.pending)+", tap End" : n ? "phrase "+(b-a).toFixed(1)+" s" : "no phrases yet";
+  $("delPhrase").disabled=!c; $("delAll").disabled=!n; $("noteIn").disabled=!c;
+  document.querySelectorAll("[data-nudge]").forEach(bn=>bn.disabled=!c);
+  document.querySelectorAll("#swatches button").forEach((bn,k)=>{ bn.disabled=!c; bn.setAttribute("aria-checked",String(!!c&&c.color===k)); });
+  const ni=$("noteIn"); if(document.activeElement!==ni){ const v=c?c.note:""; if(ni.value!==v) ni.value=v; }
 }
 function frame(){
   rafId=0;
@@ -582,13 +680,13 @@ function frame(){
     if(S.state==="listen"){
       const t=eng.time(), [a,b]=phraseSpan(S.phrase);
       if(S.loop){ if(t>=b-0.02||eng.ended()) endOfPass(); else if(t<a-0.25){ S.phrase=phraseAt(t); } }
-      else { const i=clamp(phraseAt(t),0,phraseCount()-1); if(i!==S.phrase) S.phrase=i; if(eng.ended()) setState("paused"); }
+      else { const i=phraseAt(t); if(i!==S.phrase) S.phrase=i; if(eng.ended()) setState("paused"); }
     } else if(S.state==="sing"){
       const f=(performance.now()-S.gapStart)/S.gapLen; $("drainBar").style.transform="scaleX("+clamp(1-f,0,1)+")";
       if(f>=1) startPlay();
     }
   }
-  drawOverview(); drawMain(); updateHud(); dirty=false;
+  updateHud(); drawOverview(); drawMain(); dirty=false;  // HUD first: the waveform sits below the note
   if(S.state==="listen"||S.state==="sing") kick();
 }
 function kick(){ if(!rafId) rafId=requestAnimationFrame(frame); }
@@ -611,32 +709,42 @@ $("prev").addEventListener("click",()=>goPhrase(S.phrase-1));
 $("next").addEventListener("click",()=>goPhrase(S.phrase+1));
 $("back").addEventListener("click",backThree);
 $("mark").addEventListener("click",addMarker);
-$("delMark").addEventListener("click",removeStart);
-$("delEnd").addEventListener("click",removeEnd);
-$("delAll").addEventListener("click",()=>{ const b=$("delAll"); if(!S.track||!S.markers.length) return;
-  if(!b.dataset.armed){ b.dataset.armed="1"; b.textContent="Tap again to clear all"; setTimeout(()=>{ delete b.dataset.armed; b.textContent="Clear all markers"; },3000); return; }
-  delete b.dataset.armed; b.textContent="Clear all markers"; ls("pl:m:bak:"+S.track.key,{markers:S.markers,updatedAt:S.updatedAt}); S.markers=[]; S.phrase=0; setLoop(false); markersChanged(); note("All markers cleared."); });
+$("delPhrase").addEventListener("click",()=>removePhrase(S.phrase));
+$("delAll").addEventListener("click",()=>{ const b=$("delAll"); if(!S.track||!S.phrases.length) return;
+  if(!b.dataset.armed){ b.dataset.armed="1"; b.textContent="Tap again to clear all"; setTimeout(()=>{ delete b.dataset.armed; b.textContent="Clear all phrases"; },3000); return; }
+  delete b.dataset.armed; b.textContent="Clear all phrases"; ls("pl:p:bak:"+S.track.key,{phrases:S.phrases,updatedAt:S.updatedAt});
+  S.phrases=[]; S.pending=null; S.sel=null; S.phrase=0; setLoop(false); phrasesChanged(); note("All phrases cleared."); });
 document.querySelectorAll("[data-nudge]").forEach(b=>b.addEventListener("click",()=>{ const [w,d]=b.dataset.nudge.split(","); nudge(w,parseFloat(d)); }));
+PAL.forEach((col,k)=>{ const b=document.createElement("button"); b.type="button"; b.setAttribute("role","radio"); b.setAttribute("aria-label","Colour "+(k+1));
+  b.style.background=col; b.addEventListener("click",()=>setColor(k)); $("swatches").append(b); });
+// The note edits the phrase that was current when the box got focus, even if playback moves on while typing.
+{ const ni=$("noteIn"); let target=null;
+  ni.addEventListener("focus",()=>{ target=cur(); });
+  ni.addEventListener("input",()=>{ if(!target||S.phrases.indexOf(target)<0) return; target.note=ni.value.slice(0,2000); saveNoteSoon(); refresh(); });
+  ni.addEventListener("blur",()=>{ flushNote(); target=null; }); }
 
-// stage gestures: drag a marker to move it, tap a marker to select it (then Delete),
+// stage gestures: drag a phrase edge to move it, tap an edge to select it (then Delete phrase),
 // tap elsewhere = play/pause (or deselect), double tap = restart phrase, swipe = change phrase
-function markerHit(clientX){
-  const r=wf.getBoundingClientRect(), [w0,w1]=windowSpan(); let best=-1,bd=24;
-  S.markers.forEach((m,i)=>{ if(m<=w0||m>=w1) return; const px=r.left+(m-w0)/(w1-w0)*r.width, dd=Math.abs(px-clientX); if(dd<bd){ bd=dd; best=i; } });
+function edgeHit(clientX){  // nearest start/end handle within 24 px; handles sit just inside their phrase
+  const r=wf.getBoundingClientRect(), [w0,w1]=windowSpan(); let best=null,bd=24;
+  S.phrases.forEach((p,i)=>[["s",p.start],["e",p.end]].forEach(([edge,m])=>{ if(m<w0||m>w1) return;
+    const px=r.left+(m-w0)/(w1-w0)*r.width+(edge==="s"?4:-4), dd=Math.abs(px-clientX)+(i===S.phrase?0:0.5);
+    if(dd<bd){ bd=dd; best={i,edge}; } }));
   return best;
 }
-function select(i){ S.sel=i; refresh(); }
-function deleteSelected(){ if(S.sel<0) return; const i=S.sel; S.sel=-1; removeMarker(i); }
+function select(sel){ S.sel=sel; refresh(); }
+function deleteSelected(){ if(!S.sel) return; const i=S.sel.i; S.sel=null; removePhrase(i); }
 $("mdel").addEventListener("click",e=>{ e.stopPropagation(); deleteSelected(); });
 $("mdel").addEventListener("pointerdown",e=>e.stopPropagation());
 $("mdel").addEventListener("pointerup",e=>e.stopPropagation());
 (function(){
   const st=$("stage"); let down=null,lastTap=0,drag=null;
+  const snapshot=()=>S.phrases.map(p=>Object.assign({},p));
   st.addEventListener("pointerdown",e=>{
     if(e.target.closest("#empty")||!S.track) return;
-    const hit=markerHit(e.clientX);
-    if(hit>=0){
-      drag={idx:hit,win:windowSpan(),x:e.clientX,orig:S.markers[hit],moved:false};
+    const hit=edgeHit(e.clientX);
+    if(hit){
+      drag={hit,win:windowSpan(),x:e.clientX,orig:snapshot(),moved:false};
       S.dragWin=drag.win; select(hit); try{st.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); return;
     }
     down={x:e.clientX,y:e.clientY,t:performance.now()};
@@ -644,28 +752,27 @@ $("mdel").addEventListener("pointerup",e=>e.stopPropagation());
   st.addEventListener("pointermove",e=>{
     if(!drag) return;
     if(!drag.moved&&Math.abs(e.clientX-drag.x)<4) return; drag.moved=true;
-    const r=wf.getBoundingClientRect(), [w0,w1]=drag.win, i=drag.idx;
-    const lo=(i>0?S.markers[i-1]:0)+MIN_SEP, hi=(i<S.markers.length-1?S.markers[i+1]:S.dur)-MIN_SEP;
-    const t=w0+(e.clientX-r.left)/r.width*(w1-w0);
-    S.markers[i]=Math.round(clamp(t,lo,hi)*1000)/1000; ovDirty=true; refresh();
+    const r=wf.getBoundingClientRect(), [w0,w1]=drag.win;
+    moveEdge(drag.hit.i,drag.hit.edge,w0+(e.clientX-r.left)/r.width*(w1-w0)); ovDirty=true; refresh();
   });
-  const endDrag=()=>{ const dr=drag; drag=null; S.dragWin=null; if(dr&&dr.moved&&S.markers[dr.idx]!==dr.orig) markersChanged(); else refresh(); };
+  const endDrag=()=>{ const dr=drag; drag=null; S.dragWin=null;
+    if(dr&&dr.moved&&JSON.stringify(dr.orig)!==JSON.stringify(S.phrases)) phrasesChanged(); else refresh(); };
   st.addEventListener("pointerup",e=>{
     if(drag){ endDrag(); return; }
     if(!down||!S.track) { down=null; return; }
     const dx=e.clientX-down.x, dy=e.clientY-down.y, dt=performance.now()-down.t; down=null;
-    if(Math.abs(dx)>44&&Math.abs(dx)>Math.abs(dy)*1.4){ S.sel=-1; goPhrase(S.phrase+(dx<0?1:-1)); return; }
+    if(Math.abs(dx)>44&&Math.abs(dx)>Math.abs(dy)*1.4){ S.sel=null; goPhrase(S.phrase+(dx<0?1:-1)); return; }
     if(Math.abs(dx)<12&&Math.abs(dy)<12&&dt<500){
-      if(S.sel>=0){ select(-1); return; }
+      if(S.sel){ select(null); return; }
       const now=performance.now(); if(now-lastTap<320){ lastTap=0; goPhrase(S.phrase,true); } else { lastTap=now; toggle(); } }
   });
-  st.addEventListener("pointercancel",()=>{ down=null; if(drag){ const dr=drag; S.markers[dr.idx]=dr.orig; drag=null; S.dragWin=null; refresh(); } });
+  st.addEventListener("pointercancel",()=>{ down=null; if(drag){ S.phrases=drag.orig; drag=null; S.dragWin=null; ovDirty=true; refresh(); } });
 })();
 // overview: tap or drag to move the playhead
 (function(){
   let drag=false;
   const seekTo=e=>{ if(!S.track||!S.dur) return; const r=ov.getBoundingClientRect(), t=clamp((e.clientX-r.left)/r.width,0,1)*S.dur;
-    if(S.state==="sing") setState("paused"); eng.seek(Math.min(t,S.dur-0.05)); S.phrase=clamp(phraseAt(t),0,phraseCount()-1); refresh(); };
+    if(S.state==="sing") setState("paused"); eng.seek(Math.min(t,S.dur-0.05)); S.phrase=phraseAt(t); refresh(); };
   ov.addEventListener("pointerdown",e=>{ drag=true; try{ov.setPointerCapture(e.pointerId);}catch(_){} seekTo(e); });
   ov.addEventListener("pointermove",e=>{ if(drag) seekTo(e); });
   ["pointerup","pointercancel"].forEach(n=>ov.addEventListener(n,()=>{ drag=false; }));
@@ -677,8 +784,8 @@ document.addEventListener("keydown",e=>{
   if(k===" "){ toggle(); } else if(k==="ArrowLeft") goPhrase(S.phrase-1); else if(k==="ArrowRight") goPhrase(S.phrase+1);
   else if(k==="r"||k==="R") goPhrase(S.phrase,true); else if(k==="m"||k==="M") addMarker(); else if(k==="b"||k==="B") backThree();
   else if(k==="l"||k==="L") setLoop(!S.loop);
-  else if((k==="Delete"||k==="Backspace")&&S.sel>=0) deleteSelected();
-  else if(k==="Escape"&&S.sel>=0) select(-1);
+  else if((k==="Delete"||k==="Backspace")&&S.sel) deleteSelected();
+  else if(k==="Escape"&&(S.sel||S.pending!==null)){ if(!cancelPending()) select(null); }
   else if(k==="-"||k==="="||k==="+") stepRate(k==="-"?-1:1);
   else hit=false;
   if(hit) e.preventDefault();
@@ -692,7 +799,7 @@ $("openBtn2").addEventListener("click",()=>{ $("sheet").close(); pickFile(); });
 fileIn.addEventListener("change",()=>{ const f=fileIn.files&&fileIn.files[0]; if(f) loadFile(f).catch(()=>note("Couldn't read that file.",true)); });
 document.addEventListener("dragover",e=>e.preventDefault());
 document.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
-  if(/\.json$/i.test(f.name)) importMarkers(f); else loadFile(f).catch(()=>note("Couldn't read that file.",true)); });
+  if(/\.json$/i.test(f.name)) importPhrases(f); else loadFile(f).catch(()=>note("Couldn't read that file.",true)); });
 
 // sheet
 async function openSheet(){
@@ -700,7 +807,7 @@ async function openSheet(){
   const metas=(await store.list()).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0));
   if(!metas.length){ const li=document.createElement("li"); li.textContent="No tracks stored on this device yet."; li.style.padding="14px 0"; li.style.color="var(--muted)"; list.append(li); }
   metas.forEach(m=>{ const li=document.createElement("li"), o=document.createElement("button"), d=document.createElement("button"), sm=document.createElement("small");
-    o.className="open"; o.type="button"; o.textContent=m.name; const saved=ls("pl:m:"+m.key); sm.textContent=fmt(m.dur||0)+", "+((saved&&saved.markers&&saved.markers.length)||0)+" markers"; o.append(sm);
+    o.className="open"; o.type="button"; o.textContent=m.name; sm.textContent=fmt(m.dur||0)+", "+storedPhraseCount(m.key)+" phrases"; o.append(sm);
     o.addEventListener("click",()=>{ $("sheet").close(); loadStored(m.key); });
     d.className="del"; d.type="button"; d.textContent="Remove"; d.setAttribute("aria-label","Remove "+m.name+" from this device");
     d.addEventListener("click",async()=>{ if(!d.dataset.armed){ d.dataset.armed="1"; d.textContent="Tap again to remove"; setTimeout(()=>{ if(d.isConnected){ delete d.dataset.armed; d.textContent="Remove"; } },3000); return; }
@@ -713,9 +820,10 @@ $("menuBtn").addEventListener("click",openSheet);
 $("closeSheet").addEventListener("click",()=>$("sheet").close());
 $("sheet").addEventListener("click",e=>{ if(e.target===$("sheet")) $("sheet").close(); });
 
-function markersJson(){ return JSON.stringify({app:"tristano",version:1,track:{name:S.track.name,size:S.track.size,duration:S.dur},markers:S.markers},null,2); }
+function phrasesJson(){ return JSON.stringify({app:"tristano",version:2,track:{name:S.track.name,size:S.track.size,duration:S.dur},
+  phrases:S.phrases.map(p=>({start:p.start,end:p.end,color:p.color,note:p.note}))},null,2); }
 $("exportBtn").addEventListener("click",()=>{
-  if(!S.track) return; const text=markersJson(), name=S.track.name.replace(/\.[a-z0-9]{2,5}$/i,"")+".markers.json";
+  if(!S.track) return; const text=phrasesJson(), name=S.track.name.replace(/\.[a-z0-9]{2,5}$/i,"")+".phrases.json";
   try{ const url=URL.createObjectURL(new Blob([text],{type:"application/json"})), a=document.createElement("a");
     a.href=url; a.download=name; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
     $("sheetNote").textContent="Saved "+name+"."; return; }
@@ -723,14 +831,17 @@ $("exportBtn").addEventListener("click",()=>{
   const ta=$("exportText"); ta.value=text; ta.hidden=false; ta.focus(); ta.select(); $("sheetNote").textContent="Copy this text and save it as "+name+".";
 });
 $("importBtn").addEventListener("click",()=>{ jsonIn.value=""; jsonIn.click(); });
-jsonIn.addEventListener("change",()=>{ const f=jsonIn.files&&jsonIn.files[0]; if(f) importMarkers(f); });
-async function importMarkers(f){
-  if(!S.track){ note("Open the audio file first, then import its markers.",true); return; }
-  try{ const j=JSON.parse(await f.text()); const arr=Array.isArray(j)?j:j.markers; const m=cleanMarkers(arr,S.dur);
+jsonIn.addEventListener("change",()=>{ const f=jsonIn.files&&jsonIn.files[0]; if(f) importPhrases(f); });
+async function importPhrases(f){
+  if(!S.track){ note("Open the audio file first, then import its phrases.",true); return; }
+  // accepts v2 {phrases:[...]}, v1 {markers:[s,...]} and a bare list of split times
+  try{ const j=JSON.parse(await f.text());
+    const m = j&&Array.isArray(j.phrases) ? cleanPhrases(j.phrases,S.dur) : markersToPhrases(Array.isArray(j)?j:j&&j.markers,S.dur);
     if(!m.length) throw new Error("none");
-    const had=S.markers.length; if(had) ls("pl:m:bak:"+S.track.key,{markers:S.markers,updatedAt:S.updatedAt});
-    S.markers=m; S.phrase=clamp(phraseAt(eng.time()),0,phraseCount()-1); markersChanged(); if($("sheet").open) $("sheet").close(); note("Imported "+m.length+" markers"+(had?", replacing "+had+".":".")); }
-  catch(e){ note("That file has no markers in it. It should be a JSON list of times in seconds.",true); if($("sheet").open) $("sheet").close(); }
+    const had=S.phrases.length; if(had) ls("pl:p:bak:"+S.track.key,{phrases:S.phrases,updatedAt:S.updatedAt});
+    S.phrases=m; S.pending=null; S.sel=null; S.phrase=phraseAt(eng.time()); phrasesChanged(); if($("sheet").open) $("sheet").close();
+    note("Imported "+m.length+" phrases"+(had?", replacing "+had+".":".")); }
+  catch(e){ note("That file has no phrases in it. Export one from this app to see the format.",true); if($("sheet").open) $("sheet").close(); }
 }
 
 // media keys / lock screen
@@ -744,7 +855,7 @@ if("mediaSession" in navigator){
 readColors();
 if(window.matchMedia) { const mq=matchMedia("(prefers-color-scheme: dark)"); const h=()=>{ readColors(); refresh(); }; mq.addEventListener?mq.addEventListener("change",h):mq.addListener(h); }
 new MutationObserver(()=>{ readColors(); refresh(); }).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
-if(window.ResizeObserver) new ResizeObserver(()=>{ ovDirty=true; refresh(); }).observe($("app")); else addEventListener("resize",()=>{ ovDirty=true; refresh(); });
+if(window.ResizeObserver){ const ro=new ResizeObserver(()=>{ ovDirty=true; refresh(); }); ro.observe($("app")); ro.observe($("stage")); } else addEventListener("resize",()=>{ ovDirty=true; refresh(); });
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refresh);
 
 (async function init(){
@@ -764,7 +875,8 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refresh);
   }
 })();
 
-window.__pl={S:S,eng:()=>eng}; // handy in the console
+window.__pl={S:S,eng:()=>eng,PAL:PAL,win:()=>windowSpan(),
+  setPhrases(arr){ S.phrases=cleanPhrases(arr,S.dur); S.phrase=clamp(S.phrase,0,Math.max(0,S.phrases.length-1)); phrasesChanged(); }}; // handy in the console
 })();
 </script>
 </body>

@@ -38,15 +38,15 @@ Learn jazz solos (trumpet first) by ear: hear a short phrase, sing it back, repe
 Done and covered by tests (Chromium only):
 - Open a file (Files picker / Finder / drag-drop); cached in IndexedDB so each track is picked once; track list with remove.
 - Waveform of the current phrase plus a whole-track overview strip (tap/drag to seek).
-- Mark button (compensates ~150 ms tap lag, scaled by speed). Markers are editable directly on the waveform: drag the handle to move, tap to select → Delete marker, tap away to deselect (never starts playback). Fine-tune drawer: ±50 ms start/end, remove start/end, clear all (double tap to confirm; previous set backed up to `pl:m:bak:<key>`).
+- Phrases have an explicit start and end (gaps allowed), a colour (8-colour palette, auto-assigned unlike its neighbours, changeable) and a free-text note shown on the stage. Mark: first tap = start, second = end (compensates ~150 ms tap lag, scaled by speed); a start within 0.25 s after a phrase end snaps to it; an end running into the next phrase is clipped; Esc cancels. Edges are draggable on the waveform (start = filled dot, end = ring; a shared edge moves both phrases); tap an edge → Delete phrase. Edit drawer: ±50 ms start/end, colour, note, delete, clear all (double tap; previous set backed up to `pl:p:bak:<key>`). v1 split-point markers convert to back-to-back phrases.
 - Loop phrase on/off; sing-back gap turns the stage green with a draining bar.
 - Speed stepper 25 to 100% in 5% steps, pitch preserved (`preservesPitch`).
 - Gestures: tap play/pause, double tap restart phrase, swipe for previous/next phrase, back 3 s button. Mac keys: Space, ←/→, R, M, B, L, −/=, Delete, Esc.
-- Markers JSON export/import (`{app, version:1, track:{name,size,duration}, markers:[s,…]}`); track identity = FNV hash of name|size.
+- Phrases JSON export/import (`{app:"tristano", version:2, track:{name,size,duration}, phrases:[{start,end,color,note}]}`; import also accepts v1 `markers:[s,...]`); track identity = FNV hash of name|size.
 - Wake lock while playing; Media Session handlers (lock-screen prev/next = phrase).
 - Light/dark theme.
 
-The artifact-only `window.claude` code (marker sync, `downloads`) was removed for Pages. Export is a Blob download of the JSON file (copyable textarea if that throws); move markers between devices by export/import.
+The artifact-only `window.claude` code (marker sync, `downloads`) was removed for Pages. Export is a Blob download of the JSON file (copyable textarea if that throws); move phrases between devices by export/import.
 
 ## Verified vs not
 - Verified in headless Chromium: all of the above.
@@ -65,7 +65,8 @@ Items 1 and 2 done 2026-09-25.
 
 ## Known issues / risks
 - Loop timing is rAF-polled, not sample-accurate (the gap hides it). With gap Off, the wrap can click or lag.
-- Markers can be dragged only within the current phrase's window; very close markers are hard to grab.
+- Phrase edges can be dragged only within the current phrase's window; very close edges are hard to grab.
+- Marking takes two taps per phrase (start, end), slower than the old one tap per breath for a continuous solo. A start snaps to a phrase end within 0.25 s, which helps.
 - Export uses `<a download>` on a Blob URL. Where the file lands on iOS Safari (Files prompt expected) is unverified.
 - Hidden-tab `setInterval` fallback may be throttled; looping with the phone locked is unreliable.
 
