@@ -87,6 +87,17 @@ test("marking rules: no start inside a phrase, snap to a previous end, clip at t
   await page.keyboard.press("Escape");
   expect((await st(page)).pending).toBeNull();
   expect((await st(page)).phrases).toHaveLength(3);
+
+  // on a phone there is no Esc: the Cancel start chip does it, without toggling playback
+  await expect(page.locator("#mcancel")).toBeHidden();
+  await markAt(page, 30);
+  await expect(page.locator("#mcancel")).toBeVisible();
+  await page.click("#mcancel");
+  s = await st(page);
+  expect(s.pending).toBeNull();
+  expect(s.state).toBe("paused");
+  await expect(page.locator("#mcancel")).toBeHidden();
+  await expect(page.locator("#markLab")).toHaveText("Mark");
   expect(errors).toEqual([]);
 });
 

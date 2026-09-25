@@ -62,6 +62,7 @@ button:focus-visible,summary:focus-visible,.seg input:focus-visible+span{outline
 #stage.sing .phrase span,#stage.sing .times{color:inherit;opacity:.8}
 .word{font-size:22px;font-weight:700;font-stretch:125%;text-align:right}
 .times{font-size:14px;color:var(--muted);display:flex;justify-content:space-between}
+#mcancel{position:absolute;top:calc(min(38%,88px) + 48px);left:0;z-index:2;min-height:40px;padding:0 14px;border-radius:20px;background:var(--ink);color:var(--paper);font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 #mdel{position:absolute;top:min(38%,88px);left:0;z-index:2;min-height:40px;padding:0 14px;border-radius:20px;background:var(--danger);color:#fff;font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 #drain{position:absolute;left:0;right:0;bottom:0;height:6px;opacity:0}
 #stage.sing #drain{opacity:1}
@@ -169,6 +170,7 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
     </div>
     <div id="drain"><i id="drainBar"></i></div>
     <button id="mdel" type="button" hidden>Delete phrase</button>
+    <button id="mcancel" type="button" hidden>Cancel start</button>
 
     <div id="empty">
       <h2>Learn a solo one phrase at a time.</h2>
@@ -720,6 +722,9 @@ function drawMain(){
     const y0=mid-Math.max(hi,0.015)*amp, y1=mid-Math.min(lo,-0.015)*amp; g.fillRect(i*step,y0,bar,Math.max(d,y1-y0));
   }
   g.globalAlpha=1;
+  // a bar in the phrase's colour joins each start handle to its end handle
+  inView.forEach(i=>{ const p=P[i], cy=mid+amp+14*d; g.globalAlpha=i===S.phrase?0.9:0.5; g.fillStyle=sing?colors["on-sing"]:colorOf(p);
+    g.fillRect(x(p.start),cy-1.5*d,x(p.end)-x(p.start),3*d); });
   // phrase edges and drag handles: start = filled dot, end = ring, both in the phrase's colour
   inView.forEach(i=>{ const p=P[i], col=sing?colors["on-sing"]:colorOf(p), isCur=i===S.phrase;
     [["s",p.start],["e",p.end]].forEach(([edge,m])=>{ if(m<w0||m>w1) return;
@@ -757,7 +762,9 @@ function drawOverview(){
 }
 function updateHud(){
   const has=!!S.track; ["back","prev","play","next","mark"].forEach(id=>$(id).disabled=!has);
-  if(!has){ $("mdel").hidden=true; return; }
+  if(!has){ $("mdel").hidden=true; $("mcancel").hidden=true; return; }
+  { const chip=$("mcancel"), [w0,w1]=windowSpan(), W=$("stage").clientWidth; chip.hidden=S.pending===null;
+    if(!chip.hidden){ const cw=chip.offsetWidth||110, px=S.pending>=w0&&S.pending<=w1?(S.pending-w0)/(w1-w0)*W-cw/2:8; chip.style.left=clamp(px,8,W-cw-8)+"px"; } }
   const [a,b]=phraseSpan(S.phrase), c=cur(), n=phraseCount();
   { const chip=$("mdel"), p=S.sel&&S.phrases[S.sel.i], m=p&&(S.sel.edge==="s"?p.start:p.end), [w0,w1]=windowSpan(), W=$("stage").clientWidth;
     if(p&&m>=w0&&m<=w1){ chip.hidden=false; const cw=chip.offsetWidth||120; chip.style.left=clamp((m-w0)/(w1-w0)*W-cw/2,8,W-cw-8)+"px"; }
@@ -836,6 +843,9 @@ function deleteSelected(){ if(!S.sel) return; const i=S.sel.i; S.sel=null; remov
 $("mdel").addEventListener("click",e=>{ e.stopPropagation(); deleteSelected(); });
 $("mdel").addEventListener("pointerdown",e=>e.stopPropagation());
 $("mdel").addEventListener("pointerup",e=>e.stopPropagation());
+$("mcancel").addEventListener("click",e=>{ e.stopPropagation(); cancelPending(); });
+$("mcancel").addEventListener("pointerdown",e=>e.stopPropagation());
+$("mcancel").addEventListener("pointerup",e=>e.stopPropagation());
 (function(){
   const st=$("stage"); let down=null,lastTap=0,drag=null;
   const snapshot=()=>S.phrases.map(p=>Object.assign({},p));
