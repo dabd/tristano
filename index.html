@@ -685,11 +685,18 @@ function column(t0,t1){ // min/max over a time span
   const p=S.peaks; let s=Math.floor(t0*PPS), e=Math.max(s+1,Math.floor(t1*PPS)); s=clamp(s,0,p.mn.length-1); e=clamp(e,s+1,p.mn.length);
   let lo=0,hi=0; for(let i=s;i<e;i++){ if(p.mn[i]<lo)lo=p.mn[i]; if(p.mx[i]>hi)hi=p.mx[i]; } return [lo/p.peak,hi/p.peak];
 }
+// The stretch the main waveform is about: the current phrase, or, when the playhead is in a gap
+// (between phrases, or past the last one), that gap, so the view follows the playhead.
+function gapAt(t){
+  let lo=0,hi=S.dur; S.phrases.forEach(p=>{ if(p.end<=t+0.05) lo=Math.max(lo,p.end); if(p.start>=t-0.05) hi=Math.min(hi,p.start); });
+  return [lo,Math.max(lo,hi)];
+}
+function inGap(t){ if(!S.phrases.length) return false; const [a,b]=phraseSpan(S.phrase); return t<a-0.05||t>b+0.05; }
 function windowSpan(){
   if(S.dragWin) return S.dragWin;
-  const [a,b]=phraseSpan(S.phrase), len=b-a;
+  const t0=eng.time(), [a,b]=inGap(t0)?gapAt(t0):phraseSpan(S.phrase), len=b-a;
   if(len<=24){ const pad=Math.max(0.4,len*0.08); return [Math.max(0,a-pad),Math.min(S.dur,b+pad)]; }
-  const t=clamp(eng.time(),a,b), k=Math.floor((t-a)/16); return [a+16*k,Math.min(S.dur,a+16*k+16)];
+  const t=clamp(t0,a,b), k=Math.floor((t-a)/16); return [a+16*k,Math.min(S.dur,a+16*k+16)];
 }
 function drawMain(){
   const d=fit(wf), g=wf.getContext("2d"), W=wf.width, H=wf.height; g.clearRect(0,0,W,H);
@@ -760,7 +767,7 @@ function updateHud(){
   $("pn").style.color = c&&S.state!=="sing" ? colorOf(c) : "";
   $("pnote").textContent = c ? c.note : ""; { const h=$("stage").clientHeight; $("stage").classList.toggle("short",h<300); $("stage").classList.toggle("tiny",h<220); }
   $("tNow").textContent=fmt(eng.time())+" / "+fmt(S.dur);
-  $("tLen").textContent = S.pending!==null ? "start at "+fmt(S.pending)+", tap End" : n ? "phrase "+(b-a).toFixed(1)+" s" : "no phrases yet";
+  $("tLen").textContent = S.pending!==null ? "start at "+fmt(S.pending)+", tap End" : inGap(eng.time()) ? "between phrases" : n ? "phrase "+(b-a).toFixed(1)+" s" : "no phrases yet";
   $("delPhrase").disabled=!c; $("delAll").disabled=!n; $("noteIn").disabled=!c;
   document.querySelectorAll("[data-nudge]").forEach(bn=>bn.disabled=!c);
   document.querySelectorAll("#swatches button").forEach((bn,k)=>{ bn.disabled=!c; bn.setAttribute("aria-checked",String(!!c&&c.color===k)); });

@@ -203,3 +203,24 @@ test("asks the browser to keep storage and reports the answer", async ({ page })
   await page.click("#menuBtn");
   await expect(page.locator("#storeNote")).toContainText("kept");
 });
+
+test("the waveform follows the playhead into gaps and past the last phrase", async ({ page }) => {
+  const errors = await load(page);
+  await page.evaluate(() => __pl.setPhrases([{ start: 4, end: 8 }, { start: 20, end: 24 }]));
+  const view = () => page.evaluate(() => ({ t: __pl.eng().time(), win: __pl.win(), len: document.getElementById("tLen").textContent }));
+  const shows = v => v.win[0] <= v.t && v.t <= v.win[1];
+
+  await page.evaluate(() => __pl.eng().seek(12));                  // gap between phrases 1 and 2, paused
+  let v = await view();
+  expect(shows(v)).toBe(true);
+  expect(v.win[0]).toBeLessThanOrEqual(8); expect(v.win[1]).toBeGreaterThanOrEqual(20);  // the whole gap
+
+  await page.click("#next");                                       // phrase 2 (20..24), loop is off
+  await page.evaluate(() => __pl.eng().seek(23));
+  await page.click("#play");                                       // play through the end of the last phrase
+  await expect.poll(async () => (await view()).t, { timeout: 8000 }).toBeGreaterThan(26);
+  v = await view();
+  expect(shows(v)).toBe(true);
+  expect(v.len).toBe("between phrases");
+  expect(errors).toEqual([]);
+});
