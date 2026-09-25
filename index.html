@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phrase Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --paper:#EEF2F0; --panel:#E1E8E6; --ink:#10243A; --muted:#566B7C; --line:#C6D1D4;
+  --brass:#A17C12; --brass-soft:#D9C98F; --wave:#9DB0BB;
+  --sing:#1C8168; --on-sing:#FFFFFF; --danger:#A8322A;
+  --font:"Archivo","Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1B2A; --panel:#132639; --ink:#E9EEF0; --muted:#8FA3B3; --line:#25394D;
+    --brass:#DDB846; --brass-soft:#5C4E22; --wave:#3C566B;
+    --sing:#38B899; --on-sing:#06231C; --danger:#F08A80;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1B2A; --panel:#132639; --ink:#E9EEF0; --muted:#8FA3B3; --line:#25394D;
+  --brass:#DDB846; --brass-soft:#5C4E22; --wave:#3C566B;
+  --sing:#38B899; --on-sing:#06231C; --danger:#F08A80;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);
+  font-size:16px;line-height:1.35;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;
+  font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
+button:focus-visible,summary:focus-visible,.seg input:focus-visible+span{outline:2px solid var(--brass);outline-offset:2px}
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+
+#app{height:100%;display:flex;flex-direction:column;max-width:760px;margin:0 auto}
+
+/* top bar */
+.bar{display:flex;align-items:center;gap:12px;padding:10px 16px 8px}
+.bar h1{flex:1;min-width:0;margin:0;font-size:17px;font-weight:650;font-stretch:112%;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .sync{font-size:12px;color:var(--muted);white-space:nowrap}
+.pill{min-height:36px;padding:0 14px;border:1.5px solid var(--line);border-radius:18px;font-size:14px;font-weight:600}
+
+#ov{display:block;width:100%;height:44px;touch-action:none;cursor:pointer}
+
+/* stage */
+#stage{position:relative;flex:1 1 auto;min-height:170px;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;
+  background:var(--panel);transition:background-color .18s ease,color .18s ease}
+#stage.sing{background:var(--sing);color:var(--on-sing)}
+#wf{position:absolute;inset:0;width:100%;height:100%}
+.hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:12px 16px 14px}
+.hud-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.phrase{display:flex;align-items:baseline;gap:8px}
+.phrase b{font-size:clamp(54px,17vw,92px);line-height:.82;font-weight:800;font-stretch:62%;letter-spacing:-.01em}
+.phrase span{font-size:15px;color:var(--muted);font-weight:500}
+#stage.sing .phrase span,#stage.sing .times{color:inherit;opacity:.8}
+.word{font-size:22px;font-weight:700;font-stretch:125%;text-align:right}
+.times{font-size:14px;color:var(--muted);display:flex;justify-content:space-between}
+#mdel{position:absolute;top:min(38%,88px);left:0;z-index:2;min-height:40px;padding:0 14px;border-radius:20px;background:var(--danger);color:#fff;font-size:14px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#drain{position:absolute;left:0;right:0;bottom:0;height:6px;opacity:0}
+#stage.sing #drain{opacity:1}
+#drain i{display:block;height:100%;width:100%;background:var(--on-sing);transform-origin:left center}
+
+/* empty state */
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:24px;background:var(--panel)}
+#empty h2{margin:0;font-size:clamp(34px,10vw,56px);line-height:.95;font-weight:800;font-stretch:70%}
+#empty p{margin:0;max-width:34em;color:var(--muted);font-size:15px}
+.primary{align-self:flex-start;min-height:52px;padding:0 24px;border-radius:26px;background:var(--brass);color:var(--paper);font-weight:700;font-size:17px}
+#empty .stored{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+#empty .stored button{text-align:left;padding:10px 0;border-top:1px solid var(--line);font-weight:600}
+[hidden]{display:none!important}
+
+/* controls */
+#controls{flex:0 0 auto;padding:12px 16px 14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.transport{display:grid;grid-template-columns:1fr 1fr 1.25fr 1fr 1fr;gap:8px;align-items:center}
+.tbtn{min-height:56px;border-radius:14px;border:1.5px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12px;font-weight:600;color:var(--muted)}
+.tbtn svg{width:24px;height:24px;fill:var(--ink)}
+.tbtn:active{background:var(--panel)}
+.tbtn:disabled{opacity:.4}
+#play{min-height:64px;border-radius:32px;background:var(--ink);border-color:var(--ink);color:var(--paper)}
+#play svg{width:30px;height:30px;fill:var(--paper)}
+#mark{border-color:var(--brass);color:var(--brass)}
+#mark svg{fill:var(--brass)}
+
+.row{display:flex;align-items:center;gap:10px}
+.row>label,.row>.lab{flex:0 0 96px;font-size:14px;color:var(--muted);font-weight:500}
+.seg{flex:1;display:flex;border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.seg label{flex:1;position:relative;text-align:center}
+.seg input{position:absolute;opacity:0;inset:0;width:100%;height:100%;margin:0;cursor:pointer}
+.seg span{display:block;padding:10px 0;font-size:14px;font-weight:600;border-left:1.5px solid var(--line)}
+.seg label:first-child span{border-left:0}
+.seg input:checked+span{background:var(--ink);color:var(--paper)}
+.stepper{align-items:stretch}
+.stepper button{flex:1;font-size:22px;font-weight:600;min-height:42px}
+.stepper output{flex:1.4;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;border-left:1.5px solid var(--line);border-right:1.5px solid var(--line)}
+
+details{border-top:1px solid var(--line);padding-top:8px}
+summary{font-size:14px;font-weight:600;color:var(--muted);cursor:pointer;padding:4px 0;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:" +"}
+details[open] summary::after{content:" −"}
+.edit{display:grid;grid-template-columns:96px 1fr 1fr;gap:8px;align-items:center;margin-top:8px}
+.edit .lab{font-size:14px;color:var(--muted)}
+.small{min-height:44px;border-radius:12px;border:1.5px solid var(--line);font-size:14px;font-weight:600}
+.small.danger{color:var(--danger);grid-column:2 / span 2}
+#notice{font-size:13px;color:var(--muted);margin:0}
+#notice.warn{color:var(--danger)}
+
+/* sheet */
+dialog{border:0;padding:0;margin:auto auto 0;width:100%;max-width:760px;max-height:82%;background:var(--paper);color:var(--ink);
+  border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,0px)}
+dialog::backdrop{background:rgba(6,14,24,.55)}
+.sheet{padding:18px 16px 20px;display:flex;flex-direction:column;gap:14px}
+.sheet h2{margin:0;font-size:20px;font-weight:750;font-stretch:112%}
+.sheet ul{list-style:none;margin:0;padding:0}
+.sheet li{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line)}
+.sheet li button.open{flex:1;min-width:0;text-align:left;padding:14px 0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet li button.open small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.sheet li button.del{min-height:36px;padding:0 10px;color:var(--danger);font-size:14px;font-weight:600}
+.sheet .acts{display:flex;flex-wrap:wrap;gap:8px}
+.sheet textarea{width:100%;min-height:120px;font:13px/1.4 ui-monospace,Menlo,monospace;background:var(--panel);color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:8px}
+.sheet p{margin:0;color:var(--muted);font-size:14px}
+kbd{font:inherit;font-weight:700;color:var(--ink)}
+
+@media (min-width:700px){
+  .bar{padding-top:16px}
+  #controls{padding-bottom:20px}
+}
+@media (prefers-reduced-motion:reduce){#stage{transition:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="bar">
+    <h1 id="title">Phrase Loop</h1>
+    <span class="sync" id="sync"></span>
+    <button class="pill" id="menuBtn" type="button">Tracks</button>
+  </header>
+
+  <canvas id="ov" aria-label="Whole track. Tap or drag to move the playhead."></canvas>
+
+  <section id="stage" aria-label="Current phrase. Tap to play or pause, double tap to restart the phrase, swipe to change phrase.">
+    <canvas id="wf"></canvas>
+    <div class="hud">
+      <div class="hud-top">
+        <div class="phrase"><b id="pn">1</b><span id="pt">of 1</span></div>
+        <div class="word" id="word" aria-live="polite">Paused</div>
+      </div>
+      <div class="times"><span id="tNow">0:00.0</span><span id="tLen"></span></div>
+    </div>
+    <div id="drain"><i id="drainBar"></i></div>
+    <button id="mdel" type="button" hidden>Delete marker</button>
+
+    <div id="empty">
+      <h2>Learn a solo one phrase at a time.</h2>
+      <p>Open a track, tap Mark at each breath, then loop a phrase and sing it back in the gap. The file stays on this device. Nothing is uploaded.</p>
+      <button class="primary" id="openBtn" type="button">Open audio file</button>
+      <div class="stored" id="storedList" hidden></div>
+    </div>
+  </section>
+
+  <section id="controls">
+    <div class="transport">
+      <button class="tbtn" id="back" type="button" title="Back 3 seconds (B)">
+        <svg viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>3 s</button>
+      <button class="tbtn" id="prev" type="button" title="Previous phrase (←)">
+        <svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>Phrase</button>
+      <button class="tbtn" id="play" type="button" title="Play or pause (Space)" aria-label="Play">
+        <svg viewBox="0 0 24 24" id="playIcon"><path d="M7 4v16l13-8z"/></svg></button>
+      <button class="tbtn" id="next" type="button" title="Next phrase (→)">
+        <svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>Phrase</button>
+      <button class="tbtn" id="mark" type="button" title="Drop a marker at the playhead (M)">
+        <svg viewBox="0 0 24 24"><path d="M6 3h2v18H6zM9 4h10l-3 4 3 4H9z"/></svg>Mark</button>
+    </div>
+
+    <div class="row"><span class="lab" id="speedLab">Speed</span>
+      <div class="seg stepper" id="speed"><button type="button" id="spDown" aria-label="Slower">−</button><output id="spVal" aria-live="polite">100%</output><button type="button" id="spUp" aria-label="Faster">+</button></div></div>
+    <div class="row"><span class="lab" id="gapLab">Sing-back gap</span>
+      <div class="seg" id="gap" role="radiogroup" aria-labelledby="gapLab"></div></div>
+    <div class="row"><span class="lab" id="loopLab">Loop phrase</span>
+      <div class="seg" id="loop" role="radiogroup" aria-labelledby="loopLab"></div></div>
+
+    <details id="editBox">
+      <summary>Fine-tune markers</summary>
+      <div class="edit">
+        <span class="lab">Start</span>
+        <button class="small" data-nudge="start,-0.05" type="button">Earlier 50 ms</button>
+        <button class="small" data-nudge="start,0.05" type="button">Later 50 ms</button>
+        <span class="lab">End</span>
+        <button class="small" data-nudge="end,-0.05" type="button">Earlier 50 ms</button>
+        <button class="small" data-nudge="end,0.05" type="button">Later 50 ms</button>
+        <span class="lab">Remove</span>
+        <button class="small danger" id="delMark" type="button" style="grid-column:auto">Start marker</button>
+        <button class="small danger" id="delEnd" type="button" style="grid-column:auto">End marker</button>
+        <span class="lab"></span>
+        <button class="small danger" id="delAll" type="button">Clear all markers</button>
+      </div>
+    </details>
+    <p id="notice" hidden></p>
+  </section>
+</div>
+
+<dialog id="sheet">
+  <div class="sheet">
+    <h2>Tracks</h2>
+    <ul id="trackList"></ul>
+    <div class="acts">
+      <button class="pill" id="openBtn2" type="button">Open audio file</button>
+      <button class="pill" id="importBtn" type="button">Import markers</button>
+      <button class="pill" id="exportBtn" type="button">Export markers</button>
+      <button class="pill" id="closeSheet" type="button">Close</button>
+    </div>
+    <textarea id="exportText" hidden readonly aria-label="Markers as JSON"></textarea>
+    <p id="sheetNote"></p>
+    <p>Keys: <kbd>Space</kbd> play, <kbd>←</kbd> <kbd>→</kbd> phrase, <kbd>R</kbd> restart, <kbd>M</kbd> mark, <kbd>B</kbd> back 3 s, <kbd>L</kbd> loop, <kbd>−</kbd> <kbd>=</kbd> speed.</p>
+  </div>
+</dialog>
+
+<input class="vh" type="file" id="fileIn" accept="audio/*,.m4a,.mp3,.wav,.aac,.flac,.aif,.aiff,.caf,.ogg" tabindex="-1" aria-hidden="true">
+<input class="vh" type="file" id="jsonIn" accept=".json,application/json,text/plain" tabindex="-1" aria-hidden="true">
+
+<script>
+(function(){
+"use strict";
+const $ = id => document.getElementById(id);
+const PPS = 200;                 // waveform peaks per second
+const SPEEDS = [0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,1];
+const GAPS = [[0,"Off"],[0.5,"½×"],[1,"1×"],[1.5,"1½×"],[2,"2×"]];
+const MIN_SEP = 0.25;            // minimum distance between markers, seconds
+const REACTION = 0.15;           // seconds of tap lag compensated when marking during playback
+
+const S = {
+  track:null,        // {key,name,size}
+  dur:0, peaks:null, peakMax:1,
+  markers:[], updatedAt:0,
+  phrase:0, loop:true, loopPref:true, rate:1, gapMul:1,
+  state:"idle",      // idle | paused | listen | sing
+  gapStart:0, gapLen:0,
+  fallback:false, sel:-1, dragWin:null
+};
+
+/* ---------- small helpers ---------- */
+function ls(key,val){
+  try{
+    if(val===undefined){ const v=localStorage.getItem(key); return v?JSON.parse(v):null; }
+    localStorage.setItem(key,JSON.stringify(val));
+  }catch(e){ return null; }
+}
+function fmt(t){ t=Math.max(0,t||0); const m=Math.floor(t/60), s=t-m*60; return m+":"+(s<10?"0":"")+s.toFixed(1); }
+function clamp(v,a,b){ return Math.min(b,Math.max(a,v)); }
+function trackKey(name,size){
+  let h=0x811c9dc5; const s=name+"|"+size;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
+  return "t_"+h.toString(16)+"_"+size;
+}
+function note(msg,warn){ const n=$("notice"); if(!msg){ n.hidden=true; return; } n.textContent=msg; n.hidden=false; n.classList.toggle("warn",!!warn); }
+
+/* ---------- IndexedDB: keeps picked files so they are picked once ---------- */
+const store = {
+  db:null,
+  open(){ return new Promise((res,rej)=>{
+    let r; try{ r=indexedDB.open("phrase-loop",1); }catch(e){ return rej(e); }
+    r.onupgradeneeded=()=>{ const d=r.result; d.createObjectStore("meta",{keyPath:"key"}); d.createObjectStore("audio",{keyPath:"key"}); };
+    r.onsuccess=()=>{ this.db=r.result; res(); };
+    r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error("blocked"));
+  });},
+  run(name,mode,fn){ return new Promise((res,rej)=>{
+    if(!this.db) return rej(new Error("no db"));
+    const t=this.db.transaction(name,mode); const rq=fn(t.objectStore(name));
+    t.oncomplete=()=>res(rq?rq.result:undefined); t.onerror=t.onabort=()=>rej(t.error);
+  });},
+  list(){ return this.run("meta","readonly",s=>s.getAll()).catch(()=>[]); },
+  get(name,key){ return this.run(name,"readonly",s=>s.get(key)).catch(()=>null); },
+  put(name,val){ return this.run(name,"readwrite",s=>s.put(val)); },
+  del(key){ return Promise.all([this.run("meta","readwrite",s=>s.delete(key)),this.run("audio","readwrite",s=>s.delete(key))]).catch(()=>{}); }
+};
+
+/* ---------- playback engines ---------- */
+// Primary: <audio>, which slows down without changing pitch.
+// Last resort: Web Audio buffer playback (pitch follows speed) if the host blocks local media URLs.
+const audio = new Audio(); audio.preload="auto";
+audio.preservesPitch=true; audio.webkitPreservesPitch=true; audio.mozPreservesPitch=true;
+let srcMode="blob", blobUrl=null, fileBuf=null, fileType="";
+
+const elEngine = {
+  time(){ return audio.currentTime||0; },
+  seek(t){ try{ audio.currentTime=t; }catch(e){} },
+  play(){ return audio.play(); },
+  pause(){ audio.pause(); },
+  setRate(r){ audio.playbackRate=r; audio.defaultPlaybackRate=r; },
+  ended(){ return audio.ended; }
+};
+const waEngine = {
+  ctx:null, buf:null, node:null, offset:0, t0:0, playing:false, rate:1, done:false,
+  time(){ return this.playing ? Math.min(this.buf.duration, this.offset+(this.ctx.currentTime-this.t0)*this.rate) : this.offset; },
+  stopNode(){ if(this.node){ this.node.onended=null; try{this.node.stop();}catch(e){} this.node.disconnect(); this.node=null; } },
+  seek(t){ const was=this.playing; if(was){ this.stopNode(); this.playing=false; } this.offset=clamp(t,0,this.buf.duration); this.done=false; if(was) this.play(); },
+  play(){ if(this.playing) return Promise.resolve();
+    const p=this.ctx.resume?this.ctx.resume():Promise.resolve();
+    const n=this.ctx.createBufferSource(); n.buffer=this.buf; n.playbackRate.value=this.rate; n.connect(this.ctx.destination);
+    n.onended=()=>{ if(this.node===n){ this.offset=this.time(); this.playing=false; this.done=this.offset>=this.buf.duration-0.05; } };
+    n.start(0,this.offset); this.node=n; this.t0=this.ctx.currentTime; this.playing=true; this.done=false; return p||Promise.resolve(); },
+  pause(){ if(!this.playing) return; this.offset=this.time(); this.stopNode(); this.playing=false; },
+  setRate(r){ if(this.playing){ this.offset=this.time(); this.t0=this.ctx.currentTime; this.node.playbackRate.value=r; } this.rate=r; },
+  ended(){ return this.done; }
+};
+let eng = elEngine;
+
+function setSrc(){
+  if(blobUrl){ URL.revokeObjectURL(blobUrl); blobUrl=null; }
+  if(srcMode==="blob"){ blobUrl=URL.createObjectURL(new Blob([fileBuf],{type:fileType||"audio/mp4"})); audio.src=blobUrl; audio.load(); return Promise.resolve(); }
+  return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>{ audio.src=fr.result; audio.load(); res(); }; fr.onerror=()=>rej(fr.error); fr.readAsDataURL(new Blob([fileBuf],{type:fileType||"audio/mp4"})); });
+}
+async function nextEngine(){
+  const t=eng.time();
+  if(eng===elEngine && srcMode==="blob"){ srcMode="data"; await setSrc(); elEngine.seek(t); return true; }
+  if(eng===elEngine){
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext; const ctx=new AC();
+      const buf=await decode(fileBuf,[22050,32000,44100]);
+      waEngine.ctx=ctx; waEngine.buf=buf; waEngine.offset=t; waEngine.rate=S.rate; eng=waEngine; S.fallback=true;
+      note("This browser blocked normal playback, so slowing down also lowers the pitch here.",true);
+      return true;
+    }catch(e){ return false; }
+  }
+  return false;
+}
+audio.addEventListener("error",async()=>{
+  if(!S.track||eng!==elEngine) return;
+  const was=S.state==="listen";
+  if(await nextEngine()){ if(was) startPlay(); }
+  else { setState("paused"); note("This file can't be played here. Try an MP3, M4A or WAV file.",true); }
+});
+audio.addEventListener("loadedmetadata",()=>{ if(isFinite(audio.duration)&&audio.duration>0&&!S.peaks){ S.dur=audio.duration; refresh(); } });
+
+/* ---------- decoding and waveform peaks ---------- */
+function decode(arrayBuf,rates){
+  const OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+  let chain=Promise.reject(new Error("start"));
+  rates.forEach(sr=>{ chain=chain.catch(()=>new Promise((res,rej)=>{
+    let ctx; try{ ctx=new OAC(1,1,sr); }catch(e){ return rej(e); }
+    const p=ctx.decodeAudioData(arrayBuf.slice(0),res,rej); if(p&&p.catch) p.catch(rej);
+  }));});
+  return chain;
+}
+function computePeaks(ab){
+  const n=Math.max(1,Math.ceil(ab.duration*PPS)), per=ab.sampleRate/PPS;
+  const mn=new Float32Array(n), mx=new Float32Array(n); const chans=[];
+  for(let c=0;c<ab.numberOfChannels;c++) chans.push(ab.getChannelData(c));
+  let peak=0.0001;
+  for(let i=0;i<n;i++){
+    const s=Math.floor(i*per), e=Math.min(ab.length,Math.floor((i+1)*per)); let lo=0,hi=0;
+    for(let j=s;j<e;j++){ let v=0; for(let c=0;c<chans.length;c++) v+=chans[c][j]; v/=chans.length; if(v<lo)lo=v; if(v>hi)hi=v; }
+    mn[i]=lo; mx[i]=hi; if(hi>peak)peak=hi; if(-lo>peak)peak=-lo;
+  }
+  return {mn,mx,peak};
+}
+
+/* ---------- phrases ---------- */
+function bounds(){ return [0].concat(S.markers,[S.dur]); }
+function phraseCount(){ return S.markers.length+1; }
+function phraseAt(t){ const m=S.markers; let i=0; while(i<m.length && m[i]<=t+0.001) i++; return i; }
+function phraseSpan(i){ const b=bounds(); i=clamp(i,0,b.length-2); return [b[i],b[i+1]]; }
+
+/* ---------- loading a track ---------- */
+async function loadFile(file){
+  const buf=await file.arrayBuffer();
+  await loadTrack({key:trackKey(file.name,file.size),name:file.name,size:file.size,type:file.type},buf,null,true);
+}
+async function loadStored(key){
+  const meta=await store.get("meta",key), a=await store.get("audio",key);
+  if(!meta||!a){ note("That file is no longer stored on this device. Open it again.",true); return false; }
+  await loadTrack(meta,a.buf,meta.peaks||null,false); return true;
+}
+async function loadTrack(meta,buf,cachedPeaks,isNew){
+  stopAll(); note("");
+  if(eng===waEngine){ waEngine.stopNode(); waEngine.buf=null; try{waEngine.ctx.close();}catch(e){} eng=elEngine; S.fallback=false; }
+  S.track={key:meta.key,name:meta.name,size:meta.size}; fileBuf=buf; fileType=meta.type||""; srcMode="blob";
+  S.peaks=null; S.dur=meta.dur||0; S.phrase=0; S.sel=-1;
+  const saved=ls("pl:m:"+meta.key); S.markers=saved?cleanMarkers(saved.markers,Infinity):[]; S.updatedAt=saved?saved.updatedAt||0:0;
+  $("title").textContent=meta.name.replace(/\.[a-z0-9]{2,5}$/i,"");
+  $("empty").hidden=true; setState("paused"); $("word").textContent="Reading file…"; refresh();
+  await setSrc(); eng.setRate(S.rate);
+
+  if(cachedPeaks){ S.peaks={mn:new Float32Array(cachedPeaks.mn),mx:new Float32Array(cachedPeaks.mx),peak:cachedPeaks.peak}; }
+  else{
+    try{ const ab=await decode(buf,[8000,22050,44100]); S.dur=ab.duration; S.peaks=computePeaks(ab); }
+    catch(e){ note("Couldn't draw the waveform for this file. Playback and markers still work."); }
+  }
+  if(!S.dur && isFinite(audio.duration)) S.dur=audio.duration;
+  S.markers=cleanMarkers(S.markers,S.dur);
+  S.loop = S.markers.length ? S.loopPref : false; syncSeg("loop",S.loop?"1":"0");
+  $("word").textContent="Paused";
+  ovDirty=true; refresh();
+
+  if(isNew){
+    try{
+      await store.put("audio",{key:meta.key,buf:buf});
+      await store.put("meta",{key:meta.key,name:meta.name,size:meta.size,type:fileType,dur:S.dur,addedAt:Date.now(),
+        peaks:S.peaks?{mn:S.peaks.mn.buffer,mx:S.peaks.mx.buffer,peak:S.peaks.peak}:null});
+    }catch(e){ note("Couldn't keep a copy of this file in the browser, so you'll need to open it again next time."); }
+  }
+  const st=ls("pl:settings")||{}; st.lastKey=meta.key; ls("pl:settings",st);
+  watchCloud();
+  if("mediaSession" in navigator){ try{ navigator.mediaSession.metadata=new MediaMetadata({title:$("title").textContent,artist:"Phrase Loop"}); }catch(e){} }
+}
+function unloadTrack(){
+  stopAll(); if(cloud.unsub){ cloud.unsub(); cloud.unsub=null; } setSync("");
+  S.track=null; S.peaks=null; S.dur=0; S.markers=[]; S.phrase=0; S.state="idle"; fileBuf=null;
+  audio.removeAttribute("src"); try{audio.load();}catch(e){} if(blobUrl){ URL.revokeObjectURL(blobUrl); blobUrl=null; }
+  const st=ls("pl:settings")||{}; delete st.lastKey; ls("pl:settings",st);
+  $("title").textContent="Phrase Loop"; $("empty").hidden=false; $("storedList").hidden=true; ovDirty=true; refresh();
+}
+function cleanMarkers(arr,dur){
+  if(!Array.isArray(arr)) return [];
+  const out=[]; arr.map(Number).filter(v=>isFinite(v)&&v>=MIN_SEP&&v<=dur-MIN_SEP).sort((a,b)=>a-b)
+    .forEach(v=>{ if(!out.length||v-out[out.length-1]>=MIN_SEP) out.push(Math.round(v*1000)/1000); });
+  return out;
+}
+
+/* ---------- transport ---------- */
+let wake=null;
+function setState(s){
+  S.state=s;
+  $("stage").classList.toggle("sing",s==="sing");
+  $("word").textContent = s==="sing"?"Sing" : s==="listen"?"Listen" : "Paused";
+  const playing = s==="listen"||s==="sing";
+  $("playIcon").innerHTML = playing ? '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>' : '<path d="M7 4v16l13-8z"/>';
+  $("play").setAttribute("aria-label",playing?"Pause":"Play");
+  if(playing && !wake && navigator.wakeLock){ navigator.wakeLock.request("screen").then(w=>{ wake=w; w.addEventListener("release",()=>{wake=null;}); }).catch(()=>{}); }
+  if(!playing && wake){ wake.release().catch(()=>{}); wake=null; }
+  kick();
+}
+function stopAll(){ try{eng.pause();}catch(e){} if(S.track) setState("paused"); }
+function startPlay(){
+  if(!S.track) return;
+  if(S.loop){ const [a,b]=phraseSpan(S.phrase), t=eng.time(); if(t<a-0.05||t>=b-0.03) eng.seek(a); }
+  else if(eng.ended()||eng.time()>=S.dur-0.05) eng.seek(0);
+  eng.setRate(S.rate);
+  setState("listen");
+  const p=eng.play();
+  if(p&&p.catch) p.catch(async err=>{
+    if(S.state!=="listen") return;
+    if(err&&err.name==="NotAllowedError"){ setState("paused"); note("Tap play to start the sound."); return; }
+    if(err&&err.name==="AbortError") return;
+    if(await nextEngine()) startPlay(); else { setState("paused"); note("This file can't be played here. Try an MP3, M4A or WAV file.",true); }
+  });
+}
+function toggle(){ if(!S.track) return; if(S.state==="listen"||S.state==="sing"){ eng.pause(); setState("paused"); } else startPlay(); }
+function goPhrase(i,forcePlay){
+  if(!S.track) return;
+  i=clamp(i,0,phraseCount()-1); S.phrase=i; S.sel=-1; const [a]=phraseSpan(i); eng.seek(a);
+  if(S.state==="sing"||forcePlay){ startPlay(); } else refresh();
+}
+function backThree(){ if(!S.track) return; const t=Math.max(0,eng.time()-3*S.rate); if(S.state==="sing"){ setState("paused"); } eng.seek(t); S.phrase=phraseAt(t); refresh(); }
+function endOfPass(){
+  const [a,b]=phraseSpan(S.phrase);
+  if(S.gapMul>0){
+    eng.pause(); eng.seek(a);
+    S.gapLen=S.gapMul*(b-a)/S.rate*1000; S.gapStart=performance.now(); setState("sing");
+  } else { const wasEnded=eng.ended(); eng.seek(a); if(wasEnded||(eng===elEngine&&audio.paused)){ const p=eng.play(); if(p&&p.catch) p.catch(()=>{}); } }
+}
+function setRate(r){ S.rate=r; eng.setRate(r); saveSettings(); showRate(); }
+function showRate(){ $("spVal").textContent=Math.round(S.rate*100)+"%"; $("spDown").disabled=S.rate<=SPEEDS[0]; $("spUp").disabled=S.rate>=1; }
+function stepRate(d){ const i=clamp(SPEEDS.indexOf(S.rate)+d,0,SPEEDS.length-1); setRate(SPEEDS[i]); }
+function setLoop(on){ S.loop=S.loopPref=!!on; syncSeg("loop",on?"1":"0"); if(S.track){ S.phrase=phraseAt(eng.time()); if(S.state==="sing"&&!on) startPlay(); } saveSettings(); refresh(); }
+
+/* ---------- markers ---------- */
+function markersChanged(){
+  S.updatedAt=Date.now(); ls("pl:m:"+S.track.key,{markers:S.markers,updatedAt:S.updatedAt});
+  ovDirty=true; schedulePush(); refresh();
+}
+function addMarker(){
+  if(!S.track||S.state==="sing") return;
+  let t=eng.time(); if(S.state==="listen") t-=REACTION*S.rate; // real 150 ms of tap lag = 150 ms × rate of track time
+  if(t<MIN_SEP||t>S.dur-MIN_SEP) return;
+  if(S.markers.some(m=>Math.abs(m-t)<MIN_SEP)){ note("There's already a marker here."); return; }
+  note(""); S.markers.push(Math.round(t*1000)/1000); S.markers.sort((a,b)=>a-b);
+  S.phrase=phraseAt(eng.time()); markersChanged();
+}
+function nudge(which,d){
+  if(!S.track) return; const idx = which==="start" ? S.phrase-1 : S.phrase; if(idx<0||idx>=S.markers.length) return;
+  const lo=(idx>0?S.markers[idx-1]:0)+MIN_SEP, hi=(idx<S.markers.length-1?S.markers[idx+1]:S.dur)-MIN_SEP;
+  S.markers[idx]=Math.round(clamp(S.markers[idx]+d,lo,hi)*1000)/1000; markersChanged();
+}
+function removeMarker(idx){ if(!S.track||idx<0||idx>=S.markers.length) return; S.sel=-1; S.markers.splice(idx,1); S.phrase=clamp(phraseAt(eng.time()),0,phraseCount()-1); markersChanged(); note("Marker removed."); }
+function removeStart(){ removeMarker(S.phrase-1); }
+function removeEnd(){ removeMarker(S.phrase); }
+
+/* ---------- sync between your devices (only inside Claude) ---------- */
+const cloud={db:null,uid:null,unsub:null,writing:false,dirty:false,timer:null};
+function setSync(t){ $("sync").textContent=t||""; }
+async function initCloud(){
+  try{
+    if(!window.claude||typeof window.claude.use!=="function") return;
+    const [db,user]=await Promise.all([window.claude.use("db"),window.claude.use("user")]);
+    if(!db||!user) return; const uid=await user.id(); if(!uid) return;
+    cloud.db=db; cloud.uid=uid; if(S.track) watchCloud();
+  }catch(e){}
+}
+function cloudDoc(key){ return cloud.db.collection("data/users/"+cloud.uid).doc(key); }
+function watchCloud(){
+  if(cloud.unsub){ cloud.unsub(); cloud.unsub=null; }
+  if(!cloud.db||!S.track){ setSync(""); return; }
+  const key=S.track.key; setSync("Syncing…");
+  try{
+    cloud.unsub=cloudDoc(key).onSnapshot(snap=>{
+      if(!S.track||S.track.key!==key) return;
+      if(snap.exists){
+        const d=snap.data()||{}, at=Number(d.updatedAt)||0;
+        if(at>S.updatedAt){ S.markers=cleanMarkers(d.markers,S.dur||Infinity); S.updatedAt=at; ls("pl:m:"+key,{markers:S.markers,updatedAt:at});
+          S.phrase=clamp(phraseAt(eng.time()),0,phraseCount()-1); ovDirty=true; refresh(); setSync("Markers synced"); }
+        else if(at<S.updatedAt && !snap.metadata.fromCache) schedulePush();
+        else setSync("Markers synced");
+      } else if(!snap.metadata.fromCache){ if(S.markers.length) schedulePush(); else setSync("Markers synced"); }
+    },()=>{ setSync("Markers on this device"); });
+  }catch(e){ setSync("Markers on this device"); }
+}
+function schedulePush(){ if(!cloud.db||!S.track) return; clearTimeout(cloud.timer); cloud.timer=setTimeout(doPush,900); }
+async function doPush(){
+  if(!cloud.db||!S.track) return; if(cloud.writing){ cloud.dirty=true; return; }
+  cloud.writing=true;
+  try{ await cloudDoc(S.track.key).set({name:S.track.name,duration:S.dur,markers:S.markers.slice(),updatedAt:S.updatedAt}); setSync("Markers synced"); }
+  catch(e){ setSync("Markers on this device"); }
+  cloud.writing=false; if(cloud.dirty){ cloud.dirty=false; doPush(); }
+}
+
+/* ---------- drawing ---------- */
+const wf=$("wf"), ov=$("ov"); let ovCache=null, ovDirty=true, colors={}, rafId=0, dirty=true;
+function readColors(){ const cs=getComputedStyle(document.documentElement); ["paper","panel","ink","muted","line","brass","brass-soft","wave","sing","on-sing"].forEach(k=>colors[k]=cs.getPropertyValue("--"+k).trim()); ovDirty=true; }
+function fit(c){ const r=c.getBoundingClientRect(), d=Math.min(3,window.devicePixelRatio||1), w=Math.max(1,Math.round(r.width*d)), h=Math.max(1,Math.round(r.height*d));
+  if(c.width!==w||c.height!==h){ c.width=w; c.height=h; ovDirty=true; } return d; }
+function column(t0,t1){ // min/max over a time span
+  const p=S.peaks; let s=Math.floor(t0*PPS), e=Math.max(s+1,Math.floor(t1*PPS)); s=clamp(s,0,p.mn.length-1); e=clamp(e,s+1,p.mn.length);
+  let lo=0,hi=0; for(let i=s;i<e;i++){ if(p.mn[i]<lo)lo=p.mn[i]; if(p.mx[i]>hi)hi=p.mx[i]; } return [lo/p.peak,hi/p.peak];
+}
+function windowSpan(){
+  if(S.dragWin) return S.dragWin;
+  const [a,b]=phraseSpan(S.phrase), len=b-a;
+  if(len<=24){ const pad=Math.max(0.4,len*0.08); return [Math.max(0,a-pad),Math.min(S.dur,b+pad)]; }
+  const t=clamp(eng.time(),a,b), k=Math.floor((t-a)/16); return [a+16*k,Math.min(S.dur,a+16*k+16)];
+}
+function drawMain(){
+  const d=fit(wf), g=wf.getContext("2d"), W=wf.width, H=wf.height; g.clearRect(0,0,W,H);
+  if(!S.track||!S.dur) return;
+  const sing=S.state==="sing", [w0,w1]=windowSpan(), [a,b]=phraseSpan(S.phrase), t=eng.time();
+  const top=Math.min(H*0.42,92*d), bot=Math.min(H*0.2,40*d), mid=top+(H-top-bot)/2, amp=(H-top-bot)/2*0.88, x=s=>(s-w0)/(w1-w0)*W;
+  const step=3*d, bar=2*d, n=Math.floor(W/step);
+  for(let i=0;i<n;i++){
+    const s0=w0+(i*step)/W*(w1-w0), s1=w0+((i+1)*step)/W*(w1-w0), inside=s0>=a&&s0<b;
+    let lo=-0.02,hi=0.02; if(S.peaks){ [lo,hi]=column(s0,s1); }
+    g.fillStyle = sing ? colors["on-sing"] : inside ? (s0<=t?colors.ink:colors.brass) : colors.wave;
+    g.globalAlpha = sing ? (inside?0.38:0.16) : 1;
+    const y0=mid-Math.max(hi,0.015)*amp, y1=mid-Math.min(lo,-0.015)*amp; g.fillRect(i*step,y0,bar,Math.max(d,y1-y0));
+  }
+  g.globalAlpha=1;
+  // phrase edges
+  g.fillStyle=sing?colors["on-sing"]:colors.brass; [a,b].forEach(m=>{ if(m>w0&&m<w1) g.fillRect(Math.round(x(m))-d,mid-amp-6*d,2*d,amp*2+12*d); });
+  // other markers in view
+  g.globalAlpha=0.5; S.markers.forEach(m=>{ if(m!==a&&m!==b&&m>w0&&m<w1) g.fillRect(Math.round(x(m)),mid-amp,d,amp*2); }); g.globalAlpha=1;
+  // drag handles
+  S.markers.forEach((m,i)=>{ if(m<=w0||m>=w1) return; const cx=Math.round(x(m)), sel=i===S.sel, r=(sel?9:6)*d, cy=mid+amp+6*d+r;
+    if(sel){ g.fillStyle=sing?colors["on-sing"]:colors.ink; g.fillRect(cx-1.5*d,mid-amp-6*d,3*d,amp*2+12*d); }
+    g.beginPath(); g.arc(cx,cy,r,0,Math.PI*2); g.fillStyle=sing?colors["on-sing"]:(sel?colors.ink:colors.brass); g.fill(); });
+  // playhead
+  if(!sing&&t>=w0&&t<=w1){ g.fillStyle=colors.ink; g.fillRect(Math.round(x(t))-d,mid-amp-10*d,2*d,amp*2+20*d); }
+}
+function drawOverview(){
+  const d=fit(ov), g=ov.getContext("2d"), W=ov.width, H=ov.height;
+  if(ovDirty){
+    ovCache=document.createElement("canvas"); ovCache.width=W; ovCache.height=H; const c=ovCache.getContext("2d");
+    c.fillStyle=colors.paper; c.fillRect(0,0,W,H);
+    if(S.track&&S.dur){
+      c.fillStyle=colors.wave; const mid=H/2, amp=H*0.42;
+      for(let px=0;px<W;px+=d){ let lo=-0.03,hi=0.03; if(S.peaks){ [lo,hi]=column(px/W*S.dur,(px+d)/W*S.dur); }
+        c.fillRect(px,mid-hi*amp,d,Math.max(d,(hi-lo)*amp)); }
+      c.fillStyle=colors.brass; S.markers.forEach(m=>c.fillRect(Math.round(m/S.dur*W),0,Math.max(1,d),H));
+    }
+    ovDirty=false;
+  }
+  g.clearRect(0,0,W,H); g.drawImage(ovCache,0,0);
+  if(!S.track||!S.dur) return;
+  const [a,b]=phraseSpan(S.phrase); g.globalAlpha=0.28; g.fillStyle=colors.brass; g.fillRect(a/S.dur*W,0,Math.max(2*d,(b-a)/S.dur*W),H); g.globalAlpha=1;
+  g.fillStyle=colors.ink; g.fillRect(Math.round(eng.time()/S.dur*W)-d,0,2*d,H);
+}
+function updateHud(){
+  const has=!!S.track; ["back","prev","play","next","mark"].forEach(id=>$(id).disabled=!has);
+  if(!has){ $("mdel").hidden=true; return; }
+  const [a,b]=phraseSpan(S.phrase);
+  { const chip=$("mdel"), m=S.markers[S.sel], [w0,w1]=windowSpan(), W=$("stage").clientWidth;
+    if(S.sel>=0&&m!==undefined&&m>w0&&m<w1){ chip.hidden=false; const cw=chip.offsetWidth||120; chip.style.left=clamp((m-w0)/(w1-w0)*W-cw/2,8,W-cw-8)+"px"; }
+    else chip.hidden=true; }
+  $("pn").textContent=S.phrase+1; $("pt").textContent="of "+phraseCount();
+  $("tNow").textContent=fmt(eng.time())+" / "+fmt(S.dur);
+  $("tLen").textContent = S.markers.length ? "phrase "+(b-a).toFixed(1)+" s" : "no markers yet";
+  $("delMark").disabled=S.phrase<1; $("delEnd").disabled=S.phrase>=S.markers.length; $("delAll").disabled=!S.markers.length;
+  document.querySelectorAll("[data-nudge]").forEach(bn=>{ const w=bn.dataset.nudge.split(",")[0]; bn.disabled = w==="start"?S.phrase<1:S.phrase>=S.markers.length; });
+}
+function frame(){
+  rafId=0;
+  if(S.track){
+    if(S.state==="listen"){
+      const t=eng.time(), [a,b]=phraseSpan(S.phrase);
+      if(S.loop){ if(t>=b-0.02||eng.ended()) endOfPass(); else if(t<a-0.25){ S.phrase=phraseAt(t); } }
+      else { const i=clamp(phraseAt(t),0,phraseCount()-1); if(i!==S.phrase) S.phrase=i; if(eng.ended()) setState("paused"); }
+    } else if(S.state==="sing"){
+      const f=(performance.now()-S.gapStart)/S.gapLen; $("drainBar").style.transform="scaleX("+clamp(1-f,0,1)+")";
+      if(f>=1) startPlay();
+    }
+  }
+  drawOverview(); drawMain(); updateHud(); dirty=false;
+  if(S.state==="listen"||S.state==="sing") kick();
+}
+function kick(){ if(!rafId) rafId=requestAnimationFrame(frame); }
+function refresh(){ dirty=true; kick(); }
+// rAF stops when the tab is hidden; keep the loop logic alive on a slow timer so looping survives a locked screen where the browser allows it.
+setInterval(()=>{ if(document.hidden&&(S.state==="listen"||S.state==="sing")) frame(); },120);
+
+/* ---------- controls wiring ---------- */
+function buildSeg(id,items,current,onPick){
+  const box=$(id); box.innerHTML="";
+  items.forEach(([val,label])=>{ const l=document.createElement("label"), i=document.createElement("input"), s=document.createElement("span");
+    i.type="radio"; i.name=id; i.value=String(val); i.checked=String(val)===String(current); s.textContent=label;
+    i.addEventListener("change",()=>onPick(val)); l.append(i,s); box.append(l); });
+}
+function syncSeg(id,val){ document.querySelectorAll('#'+id+' input').forEach(i=>i.checked=i.value===String(val)); }
+function saveSettings(){ const st=ls("pl:settings")||{}; st.rate=S.rate; st.gapMul=S.gapMul; st.loop=S.loopPref; ls("pl:settings",st); }
+
+$("play").addEventListener("click",toggle);
+$("prev").addEventListener("click",()=>goPhrase(S.phrase-1));
+$("next").addEventListener("click",()=>goPhrase(S.phrase+1));
+$("back").addEventListener("click",backThree);
+$("mark").addEventListener("click",addMarker);
+$("delMark").addEventListener("click",removeStart);
+$("delEnd").addEventListener("click",removeEnd);
+$("delAll").addEventListener("click",()=>{ const b=$("delAll"); if(!S.track||!S.markers.length) return;
+  if(!b.dataset.armed){ b.dataset.armed="1"; b.textContent="Tap again to clear all"; setTimeout(()=>{ delete b.dataset.armed; b.textContent="Clear all markers"; },3000); return; }
+  delete b.dataset.armed; b.textContent="Clear all markers"; ls("pl:m:bak:"+S.track.key,{markers:S.markers,updatedAt:S.updatedAt}); S.markers=[]; S.phrase=0; setLoop(false); markersChanged(); note("All markers cleared."); });
+document.querySelectorAll("[data-nudge]").forEach(b=>b.addEventListener("click",()=>{ const [w,d]=b.dataset.nudge.split(","); nudge(w,parseFloat(d)); }));
+
+// stage gestures: drag a marker to move it, tap a marker to select it (then Delete),
+// tap elsewhere = play/pause (or deselect), double tap = restart phrase, swipe = change phrase
+function markerHit(clientX){
+  const r=wf.getBoundingClientRect(), [w0,w1]=windowSpan(); let best=-1,bd=24;
+  S.markers.forEach((m,i)=>{ if(m<=w0||m>=w1) return; const px=r.left+(m-w0)/(w1-w0)*r.width, dd=Math.abs(px-clientX); if(dd<bd){ bd=dd; best=i; } });
+  return best;
+}
+function select(i){ S.sel=i; refresh(); }
+function deleteSelected(){ if(S.sel<0) return; const i=S.sel; S.sel=-1; removeMarker(i); }
+$("mdel").addEventListener("click",e=>{ e.stopPropagation(); deleteSelected(); });
+$("mdel").addEventListener("pointerdown",e=>e.stopPropagation());
+$("mdel").addEventListener("pointerup",e=>e.stopPropagation());
+(function(){
+  const st=$("stage"); let down=null,lastTap=0,drag=null;
+  st.addEventListener("pointerdown",e=>{
+    if(e.target.closest("#empty")||!S.track) return;
+    const hit=markerHit(e.clientX);
+    if(hit>=0){
+      drag={idx:hit,win:windowSpan(),x:e.clientX,orig:S.markers[hit],moved:false};
+      S.dragWin=drag.win; select(hit); try{st.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); return;
+    }
+    down={x:e.clientX,y:e.clientY,t:performance.now()};
+  });
+  st.addEventListener("pointermove",e=>{
+    if(!drag) return;
+    if(!drag.moved&&Math.abs(e.clientX-drag.x)<4) return; drag.moved=true;
+    const r=wf.getBoundingClientRect(), [w0,w1]=drag.win, i=drag.idx;
+    const lo=(i>0?S.markers[i-1]:0)+MIN_SEP, hi=(i<S.markers.length-1?S.markers[i+1]:S.dur)-MIN_SEP;
+    const t=w0+(e.clientX-r.left)/r.width*(w1-w0);
+    S.markers[i]=Math.round(clamp(t,lo,hi)*1000)/1000; ovDirty=true; refresh();
+  });
+  const endDrag=()=>{ const dr=drag; drag=null; S.dragWin=null; if(dr&&dr.moved&&S.markers[dr.idx]!==dr.orig) markersChanged(); else refresh(); };
+  st.addEventListener("pointerup",e=>{
+    if(drag){ endDrag(); return; }
+    if(!down||!S.track) { down=null; return; }
+    const dx=e.clientX-down.x, dy=e.clientY-down.y, dt=performance.now()-down.t; down=null;
+    if(Math.abs(dx)>44&&Math.abs(dx)>Math.abs(dy)*1.4){ S.sel=-1; goPhrase(S.phrase+(dx<0?1:-1)); return; }
+    if(Math.abs(dx)<12&&Math.abs(dy)<12&&dt<500){
+      if(S.sel>=0){ select(-1); return; }
+      const now=performance.now(); if(now-lastTap<320){ lastTap=0; goPhrase(S.phrase,true); } else { lastTap=now; toggle(); } }
+  });
+  st.addEventListener("pointercancel",()=>{ down=null; if(drag){ const dr=drag; S.markers[dr.idx]=dr.orig; drag=null; S.dragWin=null; refresh(); } });
+})();
+// overview: tap or drag to move the playhead
+(function(){
+  let drag=false;
+  const seekTo=e=>{ if(!S.track||!S.dur) return; const r=ov.getBoundingClientRect(), t=clamp((e.clientX-r.left)/r.width,0,1)*S.dur;
+    if(S.state==="sing") setState("paused"); eng.seek(Math.min(t,S.dur-0.05)); S.phrase=clamp(phraseAt(t),0,phraseCount()-1); refresh(); };
+  ov.addEventListener("pointerdown",e=>{ drag=true; try{ov.setPointerCapture(e.pointerId);}catch(_){} seekTo(e); });
+  ov.addEventListener("pointermove",e=>{ if(drag) seekTo(e); });
+  ["pointerup","pointercancel"].forEach(n=>ov.addEventListener(n,()=>{ drag=false; }));
+})();
+
+document.addEventListener("keydown",e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey||$("sheet").open) return; const tag=(e.target.tagName||"").toLowerCase(); if(tag==="textarea") return;
+  const k=e.key; let hit=true;
+  if(k===" "){ toggle(); } else if(k==="ArrowLeft") goPhrase(S.phrase-1); else if(k==="ArrowRight") goPhrase(S.phrase+1);
+  else if(k==="r"||k==="R") goPhrase(S.phrase,true); else if(k==="m"||k==="M") addMarker(); else if(k==="b"||k==="B") backThree();
+  else if(k==="l"||k==="L") setLoop(!S.loop);
+  else if((k==="Delete"||k==="Backspace")&&S.sel>=0) deleteSelected();
+  else if(k==="Escape"&&S.sel>=0) select(-1);
+  else if(k==="-"||k==="="||k==="+") stepRate(k==="-"?-1:1);
+  else hit=false;
+  if(hit) e.preventDefault();
+});
+
+// files
+const fileIn=$("fileIn"), jsonIn=$("jsonIn");
+function pickFile(){ fileIn.value=""; fileIn.click(); }
+$("openBtn").addEventListener("click",pickFile);
+$("openBtn2").addEventListener("click",()=>{ $("sheet").close(); pickFile(); });
+fileIn.addEventListener("change",()=>{ const f=fileIn.files&&fileIn.files[0]; if(f) loadFile(f).catch(()=>note("Couldn't read that file.",true)); });
+document.addEventListener("dragover",e=>e.preventDefault());
+document.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
+  if(/\.json$/i.test(f.name)) importMarkers(f); else loadFile(f).catch(()=>note("Couldn't read that file.",true)); });
+
+// sheet
+async function openSheet(){
+  const list=$("trackList"); list.innerHTML=""; $("exportText").hidden=true; $("sheetNote").textContent="";
+  const metas=(await store.list()).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0));
+  if(!metas.length){ const li=document.createElement("li"); li.textContent="No tracks stored on this device yet."; li.style.padding="14px 0"; li.style.color="var(--muted)"; list.append(li); }
+  metas.forEach(m=>{ const li=document.createElement("li"), o=document.createElement("button"), d=document.createElement("button"), sm=document.createElement("small");
+    o.className="open"; o.type="button"; o.textContent=m.name; const saved=ls("pl:m:"+m.key); sm.textContent=fmt(m.dur||0)+", "+((saved&&saved.markers&&saved.markers.length)||0)+" markers"; o.append(sm);
+    o.addEventListener("click",()=>{ $("sheet").close(); loadStored(m.key); });
+    d.className="del"; d.type="button"; d.textContent="Remove"; d.setAttribute("aria-label","Remove "+m.name+" from this device");
+    d.addEventListener("click",async()=>{ if(!d.dataset.armed){ d.dataset.armed="1"; d.textContent="Tap again to remove"; setTimeout(()=>{ if(d.isConnected){ delete d.dataset.armed; d.textContent="Remove"; } },3000); return; }
+      await store.del(m.key); if(S.track&&S.track.key===m.key) unloadTrack(); openSheet(); });
+    li.append(o,d); list.append(li); });
+  $("exportBtn").disabled=$("importBtn").disabled=!S.track;
+  if(!$("sheet").open) $("sheet").showModal();
+}
+$("menuBtn").addEventListener("click",openSheet);
+$("closeSheet").addEventListener("click",()=>$("sheet").close());
+$("sheet").addEventListener("click",e=>{ if(e.target===$("sheet")) $("sheet").close(); });
+
+function markersJson(){ return JSON.stringify({app:"phrase-loop",version:1,track:{name:S.track.name,size:S.track.size,duration:S.dur},markers:S.markers},null,2); }
+$("exportBtn").addEventListener("click",async()=>{
+  if(!S.track) return; const text=markersJson(), name=S.track.name.replace(/\.[a-z0-9]{2,5}$/i,"")+".markers.json";
+  try{ const dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null;
+    if(dl){ await dl.save({filename:name,data:text}); $("sheetNote").textContent="Exported markers."; return; } }
+  catch(e){ if(e&&e.code==="declined") return; }
+  const ta=$("exportText"); ta.value=text; ta.hidden=false; ta.focus(); ta.select(); $("sheetNote").textContent="Copy this text and save it as "+name+".";
+});
+$("importBtn").addEventListener("click",()=>{ jsonIn.value=""; jsonIn.click(); });
+jsonIn.addEventListener("change",()=>{ const f=jsonIn.files&&jsonIn.files[0]; if(f) importMarkers(f); });
+async function importMarkers(f){
+  if(!S.track){ note("Open the audio file first, then import its markers.",true); return; }
+  try{ const j=JSON.parse(await f.text()); const arr=Array.isArray(j)?j:j.markers; const m=cleanMarkers(arr,S.dur);
+    if(!m.length) throw new Error("none");
+    const had=S.markers.length; if(had) ls("pl:m:bak:"+S.track.key,{markers:S.markers,updatedAt:S.updatedAt});
+    S.markers=m; S.phrase=clamp(phraseAt(eng.time()),0,phraseCount()-1); markersChanged(); if($("sheet").open) $("sheet").close(); note("Imported "+m.length+" markers"+(had?", replacing "+had+".":".")); }
+  catch(e){ note("That file has no markers in it. It should be a JSON list of times in seconds.",true); if($("sheet").open) $("sheet").close(); }
+}
+
+// media keys / lock screen
+if("mediaSession" in navigator){
+  const ms=navigator.mediaSession, on=(a,f)=>{ try{ms.setActionHandler(a,f);}catch(e){} };
+  on("play",()=>{ if(S.state!=="listen"&&S.state!=="sing") startPlay(); }); on("pause",()=>{ if(S.state==="listen"||S.state==="sing") toggle(); });
+  on("previoustrack",()=>goPhrase(S.phrase-1)); on("nexttrack",()=>goPhrase(S.phrase+1)); on("seekbackward",backThree);
+}
+
+/* ---------- start ---------- */
+readColors();
+if(window.matchMedia) { const mq=matchMedia("(prefers-color-scheme: dark)"); const h=()=>{ readColors(); refresh(); }; mq.addEventListener?mq.addEventListener("change",h):mq.addListener(h); }
+new MutationObserver(()=>{ readColors(); refresh(); }).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+if(window.ResizeObserver) new ResizeObserver(()=>{ ovDirty=true; refresh(); }).observe($("app")); else addEventListener("resize",()=>{ ovDirty=true; refresh(); });
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refresh);
+
+(async function init(){
+  const st=ls("pl:settings")||{};
+  if(SPEEDS.indexOf(st.rate)>=0) S.rate=st.rate; if(typeof st.gapMul==="number") S.gapMul=st.gapMul; if(typeof st.loop==="boolean") S.loop=S.loopPref=st.loop;
+  $("spDown").addEventListener("click",()=>stepRate(-1)); $("spUp").addEventListener("click",()=>stepRate(1)); showRate();
+  buildSeg("gap",GAPS,S.gapMul,v=>{ S.gapMul=v; saveSettings(); });
+  buildSeg("loop",[["1","On"],["0","Off"]],S.loop?"1":"0",v=>setLoop(v==="1"));
+  updateHud(); refresh();
+  try{ await store.open(); }catch(e){}
+  let loaded=false;
+  if(st.lastKey&&store.db){ try{ loaded=await loadStored(st.lastKey); }catch(e){} if(!loaded) note(""); }
+  if(!loaded&&store.db){
+    const metas=await store.list(); if(metas.length){ const box=$("storedList"); box.hidden=false;
+      metas.forEach(m=>{ const b=document.createElement("button"); b.type="button"; b.textContent=m.name; b.addEventListener("click",()=>loadStored(m.key)); box.append(b); }); }
+  }
+  initCloud();
+})();
+
+window.__pl={S:S,eng:()=>eng}; // handy in the console
+})();
+</script>
+</body>
+</html>

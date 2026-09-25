@@ -1,0 +1,13 @@
+{
+  "name": "phrase-loop",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fixture": "node tools/make-fixture.mjs",
+    "test": "node tools/make-fixture.mjs && playwright test",
+    "serve": "npx --yes http-server -p 8080 -c-1 ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.0"
+  }
+}
