@@ -103,3 +103,21 @@ test("track and markers survive a reload", async ({ page }) => {
   const s = await st(page);
   expect(s.markers[0]).toBeCloseTo(3.95, 2);
 });
+
+test("export downloads a markers file that imports back", async ({ page }) => {
+  const errors = await load(page);
+  await page.evaluate(() => { __pl.S.markers = [4, 8, 12]; });
+  await page.click("#menuBtn");
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.click("#exportBtn")]);
+  expect(dl.suggestedFilename()).toBe("tones.markers.json");
+  const file = await dl.path();
+  const j = JSON.parse(await (await import("node:fs/promises")).readFile(file, "utf8"));
+  expect(j.markers).toEqual([4, 8, 12]);
+  expect(j.track.name).toBe("tones.wav");
+  await expect(page.locator("#exportText")).toBeHidden();
+
+  await page.evaluate(() => { __pl.S.markers = []; });
+  await page.setInputFiles("#jsonIn", file);
+  await expect.poll(async () => (await st(page)).markers).toEqual([4, 8, 12]);
+  expect(errors).toEqual([]);
+});

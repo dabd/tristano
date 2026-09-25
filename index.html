@@ -44,7 +44,6 @@ button:focus-visible,summary:focus-visible,.seg input:focus-visible+span{outline
 .bar{display:flex;align-items:center;gap:12px;padding:10px 16px 8px}
 .bar h1{flex:1;min-width:0;margin:0;font-size:17px;font-weight:650;font-stretch:112%;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar .sync{font-size:12px;color:var(--muted);white-space:nowrap}
 .pill{min-height:36px;padding:0 14px;border:1.5px solid var(--line);border-radius:18px;font-size:14px;font-weight:600}
 
 #ov{display:block;width:100%;height:44px;touch-action:none;cursor:pointer}
@@ -139,7 +138,6 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
 <div id="app">
   <header class="bar">
     <h1 id="title">Phrase Loop</h1>
-    <span class="sync" id="sync"></span>
     <button class="pill" id="menuBtn" type="button">Tracks</button>
   </header>
 
@@ -407,11 +405,10 @@ async function loadTrack(meta,buf,cachedPeaks,isNew){
     }catch(e){ note("Couldn't keep a copy of this file in the browser, so you'll need to open it again next time."); }
   }
   const st=ls("pl:settings")||{}; st.lastKey=meta.key; ls("pl:settings",st);
-  watchCloud();
   if("mediaSession" in navigator){ try{ navigator.mediaSession.metadata=new MediaMetadata({title:$("title").textContent,artist:"Phrase Loop"}); }catch(e){} }
 }
 function unloadTrack(){
-  stopAll(); if(cloud.unsub){ cloud.unsub(); cloud.unsub=null; } setSync("");
+  stopAll();
   S.track=null; S.peaks=null; S.dur=0; S.markers=[]; S.phrase=0; S.state="idle"; fileBuf=null;
   audio.removeAttribute("src"); try{audio.load();}catch(e){} if(blobUrl){ URL.revokeObjectURL(blobUrl); blobUrl=null; }
   const st=ls("pl:settings")||{}; delete st.lastKey; ls("pl:settings",st);
@@ -474,7 +471,7 @@ function setLoop(on){ S.loop=S.loopPref=!!on; syncSeg("loop",on?"1":"0"); if(S.t
 /* ---------- markers ---------- */
 function markersChanged(){
   S.updatedAt=Date.now(); ls("pl:m:"+S.track.key,{markers:S.markers,updatedAt:S.updatedAt});
-  ovDirty=true; schedulePush(); refresh();
+  ovDirty=true; refresh();
 }
 function addMarker(){
   if(!S.track||S.state==="sing") return;
@@ -492,44 +489,6 @@ function nudge(which,d){
 function removeMarker(idx){ if(!S.track||idx<0||idx>=S.markers.length) return; S.sel=-1; S.markers.splice(idx,1); S.phrase=clamp(phraseAt(eng.time()),0,phraseCount()-1); markersChanged(); note("Marker removed."); }
 function removeStart(){ removeMarker(S.phrase-1); }
 function removeEnd(){ removeMarker(S.phrase); }
-
-/* ---------- sync between your devices (only inside Claude) ---------- */
-const cloud={db:null,uid:null,unsub:null,writing:false,dirty:false,timer:null};
-function setSync(t){ $("sync").textContent=t||""; }
-async function initCloud(){
-  try{
-    if(!window.claude||typeof window.claude.use!=="function") return;
-    const [db,user]=await Promise.all([window.claude.use("db"),window.claude.use("user")]);
-    if(!db||!user) return; const uid=await user.id(); if(!uid) return;
-    cloud.db=db; cloud.uid=uid; if(S.track) watchCloud();
-  }catch(e){}
-}
-function cloudDoc(key){ return cloud.db.collection("data/users/"+cloud.uid).doc(key); }
-function watchCloud(){
-  if(cloud.unsub){ cloud.unsub(); cloud.unsub=null; }
-  if(!cloud.db||!S.track){ setSync(""); return; }
-  const key=S.track.key; setSync("Syncing…");
-  try{
-    cloud.unsub=cloudDoc(key).onSnapshot(snap=>{
-      if(!S.track||S.track.key!==key) return;
-      if(snap.exists){
-        const d=snap.data()||{}, at=Number(d.updatedAt)||0;
-        if(at>S.updatedAt){ S.markers=cleanMarkers(d.markers,S.dur||Infinity); S.updatedAt=at; ls("pl:m:"+key,{markers:S.markers,updatedAt:at});
-          S.phrase=clamp(phraseAt(eng.time()),0,phraseCount()-1); ovDirty=true; refresh(); setSync("Markers synced"); }
-        else if(at<S.updatedAt && !snap.metadata.fromCache) schedulePush();
-        else setSync("Markers synced");
-      } else if(!snap.metadata.fromCache){ if(S.markers.length) schedulePush(); else setSync("Markers synced"); }
-    },()=>{ setSync("Markers on this device"); });
-  }catch(e){ setSync("Markers on this device"); }
-}
-function schedulePush(){ if(!cloud.db||!S.track) return; clearTimeout(cloud.timer); cloud.timer=setTimeout(doPush,900); }
-async function doPush(){
-  if(!cloud.db||!S.track) return; if(cloud.writing){ cloud.dirty=true; return; }
-  cloud.writing=true;
-  try{ await cloudDoc(S.track.key).set({name:S.track.name,duration:S.dur,markers:S.markers.slice(),updatedAt:S.updatedAt}); setSync("Markers synced"); }
-  catch(e){ setSync("Markers on this device"); }
-  cloud.writing=false; if(cloud.dirty){ cloud.dirty=false; doPush(); }
-}
 
 /* ---------- drawing ---------- */
 const wf=$("wf"), ov=$("ov"); let ovCache=null, ovDirty=true, colors={}, rafId=0, dirty=true;
@@ -740,11 +699,12 @@ $("closeSheet").addEventListener("click",()=>$("sheet").close());
 $("sheet").addEventListener("click",e=>{ if(e.target===$("sheet")) $("sheet").close(); });
 
 function markersJson(){ return JSON.stringify({app:"phrase-loop",version:1,track:{name:S.track.name,size:S.track.size,duration:S.dur},markers:S.markers},null,2); }
-$("exportBtn").addEventListener("click",async()=>{
+$("exportBtn").addEventListener("click",()=>{
   if(!S.track) return; const text=markersJson(), name=S.track.name.replace(/\.[a-z0-9]{2,5}$/i,"")+".markers.json";
-  try{ const dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null;
-    if(dl){ await dl.save({filename:name,data:text}); $("sheetNote").textContent="Exported markers."; return; } }
-  catch(e){ if(e&&e.code==="declined") return; }
+  try{ const url=URL.createObjectURL(new Blob([text],{type:"application/json"})), a=document.createElement("a");
+    a.href=url; a.download=name; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
+    $("sheetNote").textContent="Saved "+name+"."; return; }
+  catch(e){}
   const ta=$("exportText"); ta.value=text; ta.hidden=false; ta.focus(); ta.select(); $("sheetNote").textContent="Copy this text and save it as "+name+".";
 });
 $("importBtn").addEventListener("click",()=>{ jsonIn.value=""; jsonIn.click(); });
@@ -786,7 +746,6 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refresh);
     const metas=await store.list(); if(metas.length){ const box=$("storedList"); box.hidden=false;
       metas.forEach(m=>{ const b=document.createElement("button"); b.type="button"; b.textContent=m.name; b.addEventListener("click",()=>loadStored(m.key)); box.append(b); }); }
   }
-  initCloud();
 })();
 
 window.__pl={S:S,eng:()=>eng}; // handy in the console

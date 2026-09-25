@@ -46,7 +46,7 @@ Done and covered by tests (Chromium only):
 - Wake lock while playing; Media Session handlers (lock-screen prev/next = phrase).
 - Light/dark theme.
 
-Artifact-only features (inert on Pages): marker sync via Claude account storage (`window.claude.use("db")`), export via `downloads`. Export falls back to a copyable textarea.
+The artifact-only `window.claude` code (marker sync, `downloads`) was removed for Pages. Export is a Blob download of the JSON file (copyable textarea if that throws); move markers between devices by export/import.
 
 ## Verified vs not
 - Verified in headless Chromium: all of the above.
@@ -65,7 +65,7 @@ Artifact-only features (inert on Pages): marker sync via Claude account storage 
 ## Known issues / risks
 - Loop timing is rAF-polled, not sample-accurate (the gap hides it). With gap Off, the wrap can click or lag.
 - Markers can be dragged only within the current phrase's window; very close markers are hard to grab.
-- Export via textarea is clunky outside the artifact.
+- Export uses `<a download>` on a Blob URL. Where the file lands on iOS Safari (Files prompt expected) is unverified.
 - Hidden-tab `setInterval` fallback may be throttled; looping with the phone locked is unreliable.
 
 ## Name
