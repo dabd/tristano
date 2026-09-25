@@ -32,10 +32,17 @@ async function xOf(page, t) {
 test("mark while playing, then loop a phrase with a sing-back gap", async ({ page }) => {
   const errors = await load(page);
   await page.click("#play");
-  for (let i = 0; i < 3; i++) { await page.waitForTimeout(4000); await page.click("#mark"); }
+  // Compare against the track clock read just before each tap, not wall time: audio start latency
+  // after Play varies by machine (~0.9 s seen locally), which made 4 s multiples a flaky target.
+  const tapped = [];
+  for (let i = 0; i < 3; i++) {
+    await page.waitForTimeout(4000);
+    tapped.push(await page.evaluate(() => __pl.eng().time()));
+    await page.click("#mark");
+  }
   const s1 = await st(page);
   expect(s1.markers).toHaveLength(3);
-  s1.markers.forEach((m, i) => expect(Math.abs(m - 4 * (i + 1))).toBeLessThan(0.35));
+  s1.markers.forEach((m, i) => expect(Math.abs(m - (tapped[i] - 0.15))).toBeLessThan(0.35)); // 0.15 = REACTION at 100%
 
   await page.click("#loop label:first-child");  // loop on
   await page.click("#prev");
