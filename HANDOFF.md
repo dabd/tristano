@@ -46,7 +46,9 @@ Done and covered by tests (Chromium only):
 - Wake lock while playing; Media Session handlers (lock-screen prev/next = phrase).
 - Light/dark theme.
 
-The artifact-only `window.claude` code (marker sync, `downloads`) was removed for Pages. Export is a Blob download of the JSON file (copyable textarea if that throws); move phrases between devices by export/import.
+The artifact-only `window.claude` code (marker sync, `downloads`) was removed for Pages. Export is a Blob download of the JSON file (copyable textarea if that throws).
+
+Storage and sync (2026-09-25): the app asks for persistent storage (`navigator.storage.persist()`) and shows the answer in the Tracks sheet. Phrases sync between Mac and iPhone through a secret gist ("Tristano phrases...", file `tristano.json`) using a classic token with only the `gist` scope, pasted once per device. Per track, the device that edited last wins; there is no merging inside a track. Tracks match across devices by file name + size, so the file must keep its name.
 
 ## Verified vs not
 - Verified in headless Chromium: all of the above.
@@ -68,6 +70,8 @@ Items 1 and 2 done 2026-09-25.
 - Phrase edges can be dragged only within the current phrase's window; very close edges are hard to grab.
 - Marking takes two taps per phrase (start, end), slower than the old one tap per breath for a continuous solo. A start snaps to a phrase end within 0.25 s, which helps.
 - Export uses `<a download>` on a Blob URL. Where the file lands on iOS Safari (Files prompt expected) is unverified.
+- Sync writes the whole gist file. If two devices push within the same second or so, one device's newer track can be overwritten; it comes back the next time that device syncs (its local copy is still newer).
+- The sync token sits in localStorage on the `dabd.github.io` origin. Any other GitHub Pages site on that account shares the origin and could read it; tristano is the only one today.
 - Hidden-tab `setInterval` fallback may be throttled; looping with the phone locked is unreliable.
 
 ## Name

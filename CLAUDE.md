@@ -13,13 +13,15 @@ A web app (single `index.html`, vanilla JS, no build) for learning jazz solos by
 - Playback goes through the `<audio>` element (pitch-preserving `playbackRate`, not muted by the iOS silent switch). Web Audio is used only to decode the waveform. Moving playback to Web Audio is a deliberate, planned change (see backlog), not a casual refactor.
 - Audio never leaves the device. Files are cached in IndexedDB; phrases and settings in localStorage (`pl:p:<trackKey>`, `pl:settings`).
 - No DRM circumvention and no YouTube/stream ripping features. Local files the user owns, or public-domain sources.
-- Hosted on GitHub Pages. No `window.claude.*` code: phrases move between devices by JSON export (Blob download) and import.
+- Hosted on GitHub Pages. No `window.claude.*` code. Phrases sync between devices through a secret GitHub Gist (`syncNow()`, token in localStorage `pl:sync`), and can also move by JSON export (Blob download) and import.
+- Sync talks only to `api.github.com` and carries phrases only; audio never syncs.
 
 ## Code map (index.html)
 - `S` global state; `store` IndexedDB wrapper; `elEngine` (`<audio>`) and `waEngine` (Web Audio fallback) share `time/seek/play/pause/setRate/ended`.
 - `S.phrases`: `[{start,end,color,note}]` sorted by start, never overlapping; neighbours may touch, and a touching edge moves both (`moveEdge`). Phrase navigation skips the gaps between phrases. `color` is an index into `PAL`. Old v1 split-point markers (`pl:m:<key>`) are converted on first read by `readPhrases()` and kept as a backup.
 - `frame()` rAF loop drives loop → sing gap → loop, and all drawing. `setInterval` keeps it alive when hidden.
-- `phrasesChanged()` is the single write path for phrases (localStorage). Use it.
+- `phrasesChanged()` is the single write path for phrases (localStorage, then a debounced gist sync). Use it.
+- Sync: one gist file `tristano.json` = `{tracks:{<key>:{name,size,duration,phrases,updatedAt}}}`; per track, the newer `updatedAt` wins. Runs on track load, app start, returning to the app, coming online, and 1.5 s after an edit. `tests/sync.spec.js` fakes the GitHub API.
 - `window.__pl` exposes state for tests and the console.
 
 ## Workflow

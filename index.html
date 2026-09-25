@@ -136,6 +136,10 @@ dialog::backdrop{background:rgba(6,14,24,.55)}
 .sheet .acts{display:flex;flex-wrap:wrap;gap:8px}
 .sheet textarea{width:100%;min-height:120px;font:13px/1.4 ui-monospace,Menlo,monospace;background:var(--panel);color:var(--ink);border:1.5px solid var(--line);border-radius:10px;padding:8px}
 .sheet p{margin:0;color:var(--muted);font-size:14px}
+.sheet h3{margin:0 0 6px;font-size:16px;font-weight:700}
+.syncbox{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.syncbox p.warn{color:var(--danger)}
+#tokenIn{flex:1 1 12em;min-width:0;min-height:36px;padding:0 12px;font:inherit;font-size:14px;background:var(--panel);color:var(--ink);border:1.5px solid var(--line);border-radius:18px}
 kbd{font:inherit;font-weight:700;color:var(--ink)}
 
 @media (min-width:700px){
@@ -230,6 +234,19 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
     </div>
     <textarea id="exportText" hidden readonly aria-label="Phrases as JSON"></textarea>
     <p id="sheetNote"></p>
+    <section class="syncbox">
+      <h3>Sync between devices</h3>
+      <div id="syncSetup">
+        <p>Phrases sync through a secret gist on your GitHub account. Create a classic token with only the <b>gist</b> scope (GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)), paste it here, and do the same on each device.</p>
+        <div class="acts"><input id="tokenIn" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ghp_..." aria-label="GitHub token">
+          <button class="pill" id="connectBtn" type="button">Connect</button></div>
+      </div>
+      <div id="syncOn" class="acts" hidden>
+        <button class="pill" id="syncBtn" type="button">Sync now</button>
+        <button class="pill" id="disconnectBtn" type="button">Disconnect</button>
+      </div>
+      <p id="syncStatus" aria-live="polite"></p>
+    </section>
     <p id="storeNote"></p>
     <p>Keys: <kbd>Space</kbd> play, <kbd>←</kbd> <kbd>→</kbd> phrase, <kbd>R</kbd> restart, <kbd>M</kbd> mark start/end, <kbd>Esc</kbd> cancel, <kbd>B</kbd> back 3 s, <kbd>L</kbd> loop, <kbd>−</kbd> <kbd>=</kbd> speed.</p>
   </div>
@@ -284,7 +301,7 @@ async function askPersist(){
 }
 function storageText(){
   return persisted===true ? "Storage on this device: kept (the browser won't clear it)."
-    : persisted===false ? "Storage on this device: the browser may clear it if unused. Sync keeps a copy of your phrases."
+    : persisted===false ? "Storage on this device: the browser may clear it if unused."+(syncCfg().token?" Sync keeps a copy of your phrases.":" Connect sync to keep a copy of your phrases.")
     : "Storage on this device: this browser doesn't say whether it keeps data.";
 }
 function note(msg,warn){ const n=$("notice"); if(!msg){ n.hidden=true; return; } n.textContent=msg; n.hidden=false; n.classList.toggle("warn",!!warn); }
@@ -423,10 +440,10 @@ function markersToPhrases(markers,dur){
 }
 // Per-track record in localStorage "pl:p:<key>": {phrases,updatedAt,name,size,duration}.
 // The first read of a track that only has v1 "pl:m:<key>" markers converts them (pl:m is left as a backup).
-function readPhrases(key,dur){
+function readPhrases(key,dur,info){  // info: {name,size} saved with a converted record
   const rec=ls("pl:p:"+key); if(rec) return {phrases:cleanPhrases(rec.phrases,dur||Infinity),updatedAt:rec.updatedAt||0};
   const old=ls("pl:m:"+key), P=old?markersToPhrases(old.markers,dur):[];
-  if(P.length){ const r={phrases:P,updatedAt:old.updatedAt||0}; ls("pl:p:"+key,Object.assign({},r,S.track&&S.track.key===key?{name:S.track.name,size:S.track.size,duration:dur}:{})); return r; }
+  if(P.length){ const r={phrases:P,updatedAt:old.updatedAt||0}; ls("pl:p:"+key,Object.assign({},r,info?{name:info.name,size:info.size,duration:dur}:{})); return r; }
   return {phrases:[],updatedAt:0};
 }
 function storedPhraseCount(key){
@@ -459,7 +476,7 @@ async function loadTrack(meta,buf,cachedPeaks,isNew){
     catch(e){ note("Couldn't draw the waveform for this file. Playback and phrases still work."); }
   }
   if(!S.dur && isFinite(audio.duration)) S.dur=audio.duration;
-  ({phrases:S.phrases,updatedAt:S.updatedAt}=readPhrases(meta.key,S.dur));
+  ({phrases:S.phrases,updatedAt:S.updatedAt}=readPhrases(meta.key,S.dur,meta));
   S.loop = S.phrases.length ? S.loopPref : false; syncSeg("loop",S.loop?"1":"0");
   $("word").textContent="Paused";
   ovDirty=true; refresh();
@@ -473,6 +490,7 @@ async function loadTrack(meta,buf,cachedPeaks,isNew){
     }catch(e){ note("Couldn't keep a copy of this file in the browser, so you'll need to open it again next time."); }
   }
   const st=ls("pl:settings")||{}; st.lastKey=meta.key; ls("pl:settings",st);
+  syncNow();  // no-op unless sync is connected
   if("mediaSession" in navigator){ try{ navigator.mediaSession.metadata=new MediaMetadata({title:$("title").textContent,artist:"Tristano"}); }catch(e){} }
 }
 function unloadTrack(){
@@ -535,7 +553,7 @@ function setLoop(on){ S.loop=S.loopPref=!!on; syncSeg("loop",on?"1":"0"); if(S.t
 function phrasesChanged(){
   S.updatedAt=Date.now();
   ls("pl:p:"+S.track.key,{phrases:S.phrases,updatedAt:S.updatedAt,name:S.track.name,size:S.track.size,duration:S.dur});
-  ovDirty=true; refresh();
+  ovDirty=true; refresh(); syncSoon();
 }
 function markTime(){ let t=eng.time(); if(S.state==="listen") t-=REACTION*S.rate; return r3(clamp(t,0,S.dur)); } // 150 ms of real tap lag = 150 ms × rate of track time
 // First tap marks a start, second tap an end. Tapping at a point before the pending start restarts it.
@@ -583,6 +601,80 @@ function setColor(c){ const p=cur(); if(!p) return; p.color=c; phrasesChanged();
 let noteTimer=0;
 function saveNoteSoon(){ clearTimeout(noteTimer); noteTimer=setTimeout(flushNote,400); }
 function flushNote(){ if(!noteTimer) return; clearTimeout(noteTimer); noteTimer=0; if(S.track) phrasesChanged(); }  // call before switching tracks
+
+/* ---------- sync through a secret GitHub Gist ---------- */
+// localStorage "pl:sync" = {token, gistId, dirty, last}. The gist has one file, tristano.json:
+// {app, version:2, tracks:{<trackKey>:{name,size,duration,phrases,updatedAt}}}. Per track the newer updatedAt wins,
+// so the device that edited last wins; nothing is merged inside a track.
+const GIST_FILE="tristano.json", GIST_DESC="Tristano phrases (synced by the app, do not edit)";
+const sync={busy:false,again:false,timer:0};
+function syncCfg(){ return ls("pl:sync")||{}; }
+function setSyncCfg(patch){ ls("pl:sync",Object.assign(syncCfg(),patch)); }
+async function gh(path,opt,token){
+  opt=opt||{};
+  const r=await fetch("https://api.github.com"+path,{method:opt.method||"GET",body:opt.body,cache:"no-store",  // no-store: GitHub sends max-age=60
+    headers:Object.assign({Authorization:"Bearer "+(token||syncCfg().token),Accept:"application/vnd.github+json"},opt.body?{"Content-Type":"application/json"}:{})});
+  if(!r.ok){ const e=new Error("GitHub "+r.status); e.status=r.status; throw e; }
+  return {json:r.status===204?null:await r.json(),scopes:r.headers.get("X-OAuth-Scopes")};
+}
+function localRecords(){
+  const out={};
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i);
+    if(k&&k.indexOf("pl:p:")===0&&k.indexOf("pl:p:bak:")!==0){ const r=ls(k); if(r&&Array.isArray(r.phrases)) out[k.slice(5)]=r; } } }catch(e){}
+  return out;
+}
+function setSyncStatus(t,warn){ const el=$("syncStatus"); el.textContent=t; el.classList.toggle("warn",!!warn); }
+function syncSoon(){ if(!syncCfg().token) return; setSyncCfg({dirty:true}); clearTimeout(sync.timer); sync.timer=setTimeout(syncNow,1500); }
+async function syncNow(){
+  const c=syncCfg(); if(!c.token||!c.gistId) return;
+  if(sync.busy){ sync.again=true; return; }
+  sync.busy=true; clearTimeout(sync.timer); setSyncStatus("Syncing...");
+  try{
+    const g=(await gh("/gists/"+c.gistId)).json, f=g.files&&g.files[GIST_FILE];
+    let tracks={}; try{ const j=JSON.parse(f&&f.content||"{}"); if(j&&j.tracks&&typeof j.tracks==="object") tracks=j.tracks; }catch(e){}
+    const local=localRecords(); let push=false;
+    Object.keys(tracks).forEach(k=>{ const r=tracks[k], l=local[k];
+      if(r&&Array.isArray(r.phrases)&&(!l||(r.updatedAt||0)>(l.updatedAt||0))){
+        ls("pl:p:"+k,{phrases:r.phrases,updatedAt:r.updatedAt||0,name:r.name,size:r.size,duration:r.duration});
+        if(S.track&&S.track.key===k) applyStored(); } });
+    Object.keys(local).forEach(k=>{ const l=local[k], r=tracks[k];
+      if(!r||(l.updatedAt||0)>(r.updatedAt||0)){ tracks[k]={name:l.name,size:l.size,duration:l.duration,phrases:l.phrases,updatedAt:l.updatedAt||0}; push=true; } });
+    if(push) await gh("/gists/"+c.gistId,{method:"PATCH",body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify({app:"tristano",version:2,tracks},null,1)}}})});
+    setSyncCfg({dirty:false,last:Date.now()});
+    setSyncStatus("Synced at "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})+".");
+  }catch(e){
+    setSyncCfg({dirty:true});
+    setSyncStatus(e.status===401?"GitHub rejected the token. Disconnect and paste a new one." : e.status===404?"The sync gist is gone. Disconnect and connect again to make a new one." : "Couldn't reach GitHub"+(e.status?" ("+e.status+")":"")+". Changes are kept here and sync later.",true);
+  }
+  sync.busy=false; if(sync.again){ sync.again=false; syncNow(); }
+}
+// Reload the open track's phrases after sync wrote newer ones, unless the user is mid-edit (their save will be newer anyway).
+function applyStored(){
+  if(!S.track||noteTimer||S.dragWin) return;
+  const rec=readPhrases(S.track.key,S.dur); if(rec.updatedAt<=S.updatedAt) return;
+  S.phrases=rec.phrases; S.updatedAt=rec.updatedAt; S.sel=null;
+  S.phrase=clamp(S.phrase,0,Math.max(0,S.phrases.length-1)); ovDirty=true; refresh();
+}
+async function connectSync(token){
+  token=(token||"").trim(); if(!token) return;
+  setSyncStatus("Connecting...");
+  try{
+    let id=null, scopes=null;
+    for(let page=1;page<=10&&!id;page++){
+      const r=await gh("/gists?per_page=100&page="+page,{},token); scopes=scopes||r.scopes;
+      const hit=r.json.find(g=>g.description===GIST_DESC&&g.files&&g.files[GIST_FILE]); if(hit) id=hit.id;
+      if(r.json.length<100) break;
+    }
+    if(!id) id=(await gh("/gists",{method:"POST",body:JSON.stringify({description:GIST_DESC,public:false,
+      files:{[GIST_FILE]:{content:JSON.stringify({app:"tristano",version:2,tracks:{}})}}})},token)).json.id;
+    setSyncCfg({token,gistId:id,dirty:true}); $("tokenIn").value=""; showSyncBox();
+    const extra=(scopes||"").split(",").map(s=>s.trim()).filter(s=>s&&s!=="gist");
+    await syncNow();
+    if(extra.length) setSyncStatus($("syncStatus").textContent+" This token also has "+extra.join(", ")+" access; a token with only gist is safer.",true);
+  }catch(e){ setSyncStatus(e.status===401?"GitHub rejected that token.":"Couldn't connect to GitHub"+(e.status?" ("+e.status+")":"")+".",true); }
+}
+function disconnectSync(){ const c=syncCfg(); delete c.token; delete c.gistId; ls("pl:sync",c); setSyncStatus("Not syncing. Phrases stay on this device."); showSyncBox(); }
+function showSyncBox(){ const on=!!syncCfg().token; $("syncSetup").hidden=on; $("syncOn").hidden=!on; }
 
 /* ---------- drawing ---------- */
 const wf=$("wf"), ov=$("ov"); let ovCache=null, ovDirty=true, colors={}, rafId=0, dirty=true;
@@ -803,6 +895,8 @@ document.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer
 
 // sheet
 async function openSheet(){
+  showSyncBox();
+  { const c=syncCfg(); if(!$("syncStatus").textContent) setSyncStatus(!c.token?"Not syncing. Phrases stay on this device.":c.dirty?"Changes waiting to sync.":c.last?"Last synced "+new Date(c.last).toLocaleString():""); }
   const list=$("trackList"); list.innerHTML=""; $("exportText").hidden=true; $("sheetNote").textContent=""; $("storeNote").textContent=storageText();
   const metas=(await store.list()).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0));
   if(!metas.length){ const li=document.createElement("li"); li.textContent="No tracks stored on this device yet."; li.style.padding="14px 0"; li.style.color="var(--muted)"; list.append(li); }
@@ -818,6 +912,12 @@ async function openSheet(){
 }
 $("menuBtn").addEventListener("click",openSheet);
 $("closeSheet").addEventListener("click",()=>$("sheet").close());
+$("connectBtn").addEventListener("click",()=>connectSync($("tokenIn").value));
+$("tokenIn").addEventListener("keydown",e=>{ if(e.key==="Enter") connectSync($("tokenIn").value); });
+$("syncBtn").addEventListener("click",syncNow);
+$("disconnectBtn").addEventListener("click",disconnectSync);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) syncNow(); });
+addEventListener("online",syncNow);
 $("sheet").addEventListener("click",e=>{ if(e.target===$("sheet")) $("sheet").close(); });
 
 function phrasesJson(){ return JSON.stringify({app:"tristano",version:2,track:{name:S.track.name,size:S.track.size,duration:S.dur},
@@ -867,15 +967,17 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refresh);
   updateHud(); refresh();
   try{ await store.open(); }catch(e){}
   askPersist();
+  if(store.db) (await store.list()).forEach(m=>{ if(m.dur) readPhrases(m.key,m.dur,m); });  // convert v1 markers so every track can sync
   let loaded=false;
   if(st.lastKey&&store.db){ try{ loaded=await loadStored(st.lastKey); }catch(e){} if(!loaded) note(""); }
   if(!loaded&&store.db){
     const metas=await store.list(); if(metas.length){ const box=$("storedList"); box.hidden=false;
       metas.forEach(m=>{ const b=document.createElement("button"); b.type="button"; b.textContent=m.name; b.addEventListener("click",()=>loadStored(m.key)); box.append(b); }); }
   }
+  if(!loaded) syncNow();
 })();
 
-window.__pl={S:S,eng:()=>eng,PAL:PAL,win:()=>windowSpan(),
+window.__pl={S:S,eng:()=>eng,PAL:PAL,win:()=>windowSpan(),syncNow:syncNow,
   setPhrases(arr){ S.phrases=cleanPhrases(arr,S.dur); S.phrase=clamp(S.phrase,0,Math.max(0,S.phrases.length-1)); phrasesChanged(); }}; // handy in the console
 })();
 </script>
