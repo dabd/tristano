@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Phrase Loop</title>
+<title>Tristano</title>
+<meta name="apple-mobile-web-app-title" content="Tristano">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
@@ -137,7 +138,7 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
 <body>
 <div id="app">
   <header class="bar">
-    <h1 id="title">Phrase Loop</h1>
+    <h1 id="title">Tristano</h1>
     <button class="pill" id="menuBtn" type="button">Tracks</button>
   </header>
 
@@ -263,7 +264,7 @@ function note(msg,warn){ const n=$("notice"); if(!msg){ n.hidden=true; return; }
 const store = {
   db:null,
   open(){ return new Promise((res,rej)=>{
-    let r; try{ r=indexedDB.open("phrase-loop",1); }catch(e){ return rej(e); }
+    let r; try{ r=indexedDB.open("phrase-loop",1); /* pre-rename DB name, kept so stored tracks survive */ }catch(e){ return rej(e); }
     r.onupgradeneeded=()=>{ const d=r.result; d.createObjectStore("meta",{keyPath:"key"}); d.createObjectStore("audio",{keyPath:"key"}); };
     r.onsuccess=()=>{ this.db=r.result; res(); };
     r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error("blocked"));
@@ -405,14 +406,14 @@ async function loadTrack(meta,buf,cachedPeaks,isNew){
     }catch(e){ note("Couldn't keep a copy of this file in the browser, so you'll need to open it again next time."); }
   }
   const st=ls("pl:settings")||{}; st.lastKey=meta.key; ls("pl:settings",st);
-  if("mediaSession" in navigator){ try{ navigator.mediaSession.metadata=new MediaMetadata({title:$("title").textContent,artist:"Phrase Loop"}); }catch(e){} }
+  if("mediaSession" in navigator){ try{ navigator.mediaSession.metadata=new MediaMetadata({title:$("title").textContent,artist:"Tristano"}); }catch(e){} }
 }
 function unloadTrack(){
   stopAll();
   S.track=null; S.peaks=null; S.dur=0; S.markers=[]; S.phrase=0; S.state="idle"; fileBuf=null;
   audio.removeAttribute("src"); try{audio.load();}catch(e){} if(blobUrl){ URL.revokeObjectURL(blobUrl); blobUrl=null; }
   const st=ls("pl:settings")||{}; delete st.lastKey; ls("pl:settings",st);
-  $("title").textContent="Phrase Loop"; $("empty").hidden=false; $("storedList").hidden=true; ovDirty=true; refresh();
+  $("title").textContent="Tristano"; $("empty").hidden=false; $("storedList").hidden=true; ovDirty=true; refresh();
 }
 function cleanMarkers(arr,dur){
   if(!Array.isArray(arr)) return [];
@@ -698,7 +699,7 @@ $("menuBtn").addEventListener("click",openSheet);
 $("closeSheet").addEventListener("click",()=>$("sheet").close());
 $("sheet").addEventListener("click",e=>{ if(e.target===$("sheet")) $("sheet").close(); });
 
-function markersJson(){ return JSON.stringify({app:"phrase-loop",version:1,track:{name:S.track.name,size:S.track.size,duration:S.dur},markers:S.markers},null,2); }
+function markersJson(){ return JSON.stringify({app:"tristano",version:1,track:{name:S.track.name,size:S.track.size,duration:S.dur},markers:S.markers},null,2); }
 $("exportBtn").addEventListener("click",()=>{
   if(!S.track) return; const text=markersJson(), name=S.track.name.replace(/\.[a-z0-9]{2,5}$/i,"")+".markers.json";
   try{ const url=URL.createObjectURL(new Blob([text],{type:"application/json"})), a=document.createElement("a");

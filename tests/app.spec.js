@@ -114,10 +114,23 @@ test("export downloads a markers file that imports back", async ({ page }) => {
   const j = JSON.parse(await (await import("node:fs/promises")).readFile(file, "utf8"));
   expect(j.markers).toEqual([4, 8, 12]);
   expect(j.track.name).toBe("tones.wav");
+  expect(j.app).toBe("tristano");
   await expect(page.locator("#exportText")).toBeHidden();
 
   await page.evaluate(() => { __pl.S.markers = []; });
   await page.setInputFiles("#jsonIn", file);
   await expect.poll(async () => (await st(page)).markers).toEqual([4, 8, 12]);
   expect(errors).toEqual([]);
+});
+
+test("renamed app still reads data saved under the Phrase Loop keys", async ({ page }) => {
+  await load(page);
+  await expect(page).toHaveTitle("Tristano");
+  await expect(page.locator("#title")).not.toHaveText("Phrase Loop");
+  // Write markers the way a pre-rename install did: literal pl:m:<key> in localStorage.
+  await page.evaluate(() => localStorage.setItem("pl:m:" + __pl.S.track.key,
+    JSON.stringify({ markers: [5, 10], updatedAt: 1 })));
+  await page.reload();  // track itself comes back from IndexedDB "phrase-loop"
+  await page.waitForFunction(() => window.__pl.S.track && window.__pl.S.peaks);
+  expect((await st(page)).markers).toEqual([5, 10]);
 });

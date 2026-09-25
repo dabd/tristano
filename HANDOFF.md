@@ -53,6 +53,7 @@ The artifact-only `window.claude` code (marker sync, `downloads`) was removed fo
 - Reported by Dario on iPhone: the app runs in the Claude viewer and a file opened (the marker-deletion complaint came from real use). Everything else on iOS is unverified: AAC decode of the Sunflower m4a, pitch-preserved playback below 50% (Safari's stretcher gets watery; may degrade badly at 25%), memory decoding an 8-minute track (~80 MB PCM), looping with the screen locked, touch accuracy of the 24 px marker hit zone, IndexedDB eviction (home-screen web apps believed exempt; unverified).
 
 ## Backlog (suggested order)
+Items 1 and 2 done 2026-09-25.
 1. **Deploy to GitHub Pages**; remove or replace `window.claude` code (sync → JSON export/import for now; export → Blob download link).
 2. **Rename** (see names below). Update title, heading and storage prefix. Storage keys are `pl:*` plus IndexedDB `phrase-loop`, so migrate or keep them.
 3. **Mic meter in the sing gap.** Mic input → YIN/autocorrelation pitch tracker (monophonic voice, real time, a few cents' accuracy) → note name plus cents needle. Needs headphones. Shows your pitch, not the answer. About half a day. Needs mic permission (Pages fine; the artifact viewer was unverified).
@@ -69,7 +70,7 @@ The artifact-only `window.claude` code (marker sync, `downloads`) was removed fo
 - Hidden-tab `setInterval` fallback may be throttled; looping with the phone locked is unreliable.
 
 ## Name
-Undecided. Candidates: Tristano (Lennie Tristano had students sing classic solos note for note before playing them, which is exactly this app's method; Konitz was his student), Ferrara (homage to Don Ferrara), Sunflower, Very Cool, Cool School, Woodshed, Call & Response, Sing the Line. Check App Store/trademark clashes before committing; real names of people carry some estate/trademark risk for a public release, not for personal use.
+**Decided 2026-09-25: Tristano** (repo dabd/tristano, https://dabd.github.io/tristano/). Storage keys stay `pl:*` and IndexedDB `phrase-loop`, so data saved before the rename survives. Original candidates: Tristano (Lennie Tristano had students sing classic solos note for note before playing them, which is exactly this app's method; Konitz was his student), Ferrara (homage to Don Ferrara), Sunflower, Very Cool, Cool School, Woodshed, Call & Response, Sing the Line. Check App Store/trademark clashes before committing; real names of people carry some estate/trademark risk for a public release, not for personal use.
 
 ## Prior-art check still to do
 Amazing Slow Downer, Transcribe!, Anytune, Moises cover slow-down/looping (Moises has separation). The gap this app targets, phrase-centric navigation plus a timed sing-back silence, wasn't confirmed as missing from them.
