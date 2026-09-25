@@ -217,6 +217,7 @@ kbd{font:inherit;font-weight:700;color:var(--ink)}
     </div>
     <textarea id="exportText" hidden readonly aria-label="Markers as JSON"></textarea>
     <p id="sheetNote"></p>
+    <p id="storeNote"></p>
     <p>Keys: <kbd>Space</kbd> play, <kbd>←</kbd> <kbd>→</kbd> phrase, <kbd>R</kbd> restart, <kbd>M</kbd> mark, <kbd>B</kbd> back 3 s, <kbd>L</kbd> loop, <kbd>−</kbd> <kbd>=</kbd> speed.</p>
   </div>
 </dialog>
@@ -257,6 +258,18 @@ function trackKey(name,size){
   let h=0x811c9dc5; const s=name+"|"+size;
   for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
   return "t_"+h.toString(16)+"_"+size;
+}
+// Ask the browser not to evict our storage (IndexedDB audio + localStorage markers). Safari decides by
+// its own heuristics (Home Screen apps are the likely grant); we only report the answer.
+let persisted=null;
+async function askPersist(){
+  try{ if(!navigator.storage||!navigator.storage.persist) return;
+    persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist()); }catch(e){}
+}
+function storageText(){
+  return persisted===true ? "Storage on this device: kept (the browser won't clear it)."
+    : persisted===false ? "Storage on this device: the browser may clear it if unused. Sync keeps a copy of your phrases."
+    : "Storage on this device: this browser doesn't say whether it keeps data.";
 }
 function note(msg,warn){ const n=$("notice"); if(!msg){ n.hidden=true; return; } n.textContent=msg; n.hidden=false; n.classList.toggle("warn",!!warn); }
 
@@ -399,6 +412,7 @@ async function loadTrack(meta,buf,cachedPeaks,isNew){
   ovDirty=true; refresh();
 
   if(isNew){
+    if(persisted!==true) askPersist();  // ask again after a user gesture; some browsers only grant then
     try{
       await store.put("audio",{key:meta.key,buf:buf});
       await store.put("meta",{key:meta.key,name:meta.name,size:meta.size,type:fileType,dur:S.dur,addedAt:Date.now(),
@@ -682,7 +696,7 @@ document.addEventListener("drop",e=>{ e.preventDefault(); const f=e.dataTransfer
 
 // sheet
 async function openSheet(){
-  const list=$("trackList"); list.innerHTML=""; $("exportText").hidden=true; $("sheetNote").textContent="";
+  const list=$("trackList"); list.innerHTML=""; $("exportText").hidden=true; $("sheetNote").textContent=""; $("storeNote").textContent=storageText();
   const metas=(await store.list()).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0));
   if(!metas.length){ const li=document.createElement("li"); li.textContent="No tracks stored on this device yet."; li.style.padding="14px 0"; li.style.color="var(--muted)"; list.append(li); }
   metas.forEach(m=>{ const li=document.createElement("li"), o=document.createElement("button"), d=document.createElement("button"), sm=document.createElement("small");
@@ -741,6 +755,7 @@ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(refresh);
   buildSeg("loop",[["1","On"],["0","Off"]],S.loop?"1":"0",v=>setLoop(v==="1"));
   updateHud(); refresh();
   try{ await store.open(); }catch(e){}
+  askPersist();
   let loaded=false;
   if(st.lastKey&&store.db){ try{ loaded=await loadStored(st.lastKey); }catch(e){} if(!loaded) note(""); }
   if(!loaded&&store.db){

@@ -134,3 +134,15 @@ test("renamed app still reads data saved under the Phrase Loop keys", async ({ p
   await page.waitForFunction(() => window.__pl.S.track && window.__pl.S.peaks);
   expect((await st(page)).markers).toEqual([5, 10]);
 });
+
+test("asks the browser to keep storage and reports the answer", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__persistCalls = 0;
+    navigator.storage.persisted = async () => false;
+    navigator.storage.persist = async () => { window.__persistCalls++; return true; };
+  });
+  await load(page);
+  expect(await page.evaluate(() => window.__persistCalls)).toBeGreaterThan(0);
+  await page.click("#menuBtn");
+  await expect(page.locator("#storeNote")).toContainText("kept");
+});
