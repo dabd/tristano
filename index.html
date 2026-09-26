@@ -581,17 +581,19 @@ function addMarker(){
 }
 function cancelPending(){ if(S.pending===null) return false; S.pending=null; note(""); refresh(); return true; }
 // Move one edge of phrase i. An edge shared with a touching neighbour moves both phrases.
-// A drag decides this once when it starts (edgeLinked); otherwise an edge dragged up against its
-// neighbour would stick to it and push the neighbour.
-function edgeLinked(i,edge){ const P=S.phrases, p=P[i], q=edge==="s"?P[i-1]:P[i+1];
-  return !!(p&&q&&Math.abs((edge==="s"?q.end-p.start:q.start-p.end))<0.002); }
-function moveEdge(i,edge,t,linked){
+// Where two phrases touch, an edge pushes its neighbour's edge but never pulls it: moving the edge into
+// its own phrase opens a gap, moving it into the neighbour moves both. b0 is where the shared edge was
+// when the gesture started (null if the phrases didn't touch then). A drag fixes b0 when it starts, so an
+// edge dragged up against a phrase it didn't touch stops there instead of pushing it.
+function linkedAt(i,edge){ const P=S.phrases, p=P[i], q=edge==="s"?P[i-1]:P[i+1];
+  return p&&q&&Math.abs(edge==="s"?q.end-p.start:q.start-p.end)<0.002 ? (edge==="s"?p.start:p.end) : null; }
+function moveEdge(i,edge,t,b0){
   const P=S.phrases, p=P[i]; if(!p) return;
-  if(linked===undefined) linked=edgeLinked(i,edge);
+  if(b0===undefined) b0=linkedAt(i,edge);
   if(edge==="s"){ const pv=P[i-1];
-    const v=r3(clamp(t, pv?(linked?pv.start+MIN_SEP:pv.end):0, p.end-MIN_SEP)); p.start=v; if(linked) pv.end=v; }
+    const v=r3(clamp(t, pv?(b0!==null?pv.start+MIN_SEP:pv.end):0, p.end-MIN_SEP)); p.start=v; if(b0!==null) pv.end=Math.min(b0,v); }
   else { const nx=P[i+1];
-    const v=r3(clamp(t, p.start+MIN_SEP, nx?(linked?nx.end-MIN_SEP:nx.start):S.dur)); p.end=v; if(linked) nx.start=v; }
+    const v=r3(clamp(t, p.start+MIN_SEP, nx?(b0!==null?nx.end-MIN_SEP:nx.start):S.dur)); p.end=v; if(b0!==null) nx.start=Math.max(b0,v); }
 }
 function nudge(which,d){
   const p=cur(); if(!S.track||!p) return;
@@ -859,7 +861,7 @@ $("mcancel").addEventListener("pointerup",e=>e.stopPropagation());
     if(e.target.closest("#empty")||!S.track) return;
     const hit=edgeHit(e.clientX);
     if(hit){
-      drag={hit,win:windowSpan(),x:e.clientX,orig:snapshot(),moved:false,linked:edgeLinked(hit.i,hit.edge)};
+      drag={hit,win:windowSpan(),x:e.clientX,orig:snapshot(),moved:false,b0:linkedAt(hit.i,hit.edge)};
       S.dragWin=drag.win; select(hit); try{st.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); return;
     }
     down={x:e.clientX,y:e.clientY,t:performance.now()};
@@ -868,7 +870,7 @@ $("mcancel").addEventListener("pointerup",e=>e.stopPropagation());
   // faster the further out; the view stops once the edge reaches its limit, so the edge stays in sight.
   const EDGE=32; let lastX=0, lastT=0, scrollRaf=0;
   const applyDrag=()=>{ const r=wf.getBoundingClientRect(), [w0,w1]=drag.win, px=clamp(lastX,r.left,r.right);
-    moveEdge(drag.hit.i,drag.hit.edge,w0+(px-r.left)/r.width*(w1-w0),drag.linked); ovDirty=true; refresh(); };
+    moveEdge(drag.hit.i,drag.hit.edge,w0+(px-r.left)/r.width*(w1-w0),drag.b0); ovDirty=true; refresh(); };
   const overshoot=()=>{ const r=wf.getBoundingClientRect();
     return lastX<r.left+EDGE ? lastX-(r.left+EDGE) : lastX>r.right-EDGE ? lastX-(r.right-EDGE) : 0; };
   const scrollStep=now=>{

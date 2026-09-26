@@ -41,6 +41,7 @@ async function markAt(page, t) {
 test("mark start and end while playing, then loop a phrase with a sing-back gap", async ({ page }) => {
   const errors = await load(page);
   await page.click("#play");
+  await page.waitForFunction(() => __pl.eng().time() > 0.2);   // audio can start late on a loaded machine
   // Compare against the track clock read just before each tap, not wall time: audio start latency
   // after Play varies by machine (~0.9 s seen locally).
   const tapped = [];
@@ -113,7 +114,7 @@ test("speed stepper goes down to 25% and plays", async ({ page }) => {
   expect(s.t).toBeLessThan(0.6);
 });
 
-test("drag phrase edges (a shared edge moves both phrases), select and delete a phrase", async ({ page }) => {
+test("drag phrase edges (a shared edge pushes its neighbour, never pulls it), select and delete a phrase", async ({ page }) => {
   await load(page);
   await page.evaluate(() => __pl.setPhrases([{ start: 0.5, end: 3.5 }, { start: 3.5, end: 7.5 }, { start: 9, end: 12 }]));
   await page.click("#next");                        // phrase 2: 3.5 s .. 7.5 s
@@ -128,10 +129,16 @@ test("drag phrase edges (a shared edge moves both phrases), select and delete a 
   expect(s.state).toBe("paused");
 
   h = await handleAt(page, 3.5, "s");
-  await drag(page, h, (await handleAt(page, 3.8, "s")).x);
+  await drag(page, h, (await handleAt(page, 3.2, "s")).x);   // into the previous phrase: pushes its end
+  s = await st(page);
+  expect(s.phrases[1].start).toBeCloseTo(3.2, 1);
+  expect(s.phrases[0].end).toBe(s.phrases[1].start);
+
+  h = await handleAt(page, s.phrases[1].start, "s");
+  await drag(page, h, (await handleAt(page, 3.8, "s")).x);   // into its own phrase: separates
   s = await st(page);
   expect(s.phrases[1].start).toBeCloseTo(3.8, 1);
-  expect(s.phrases[0].end).toBe(s.phrases[1].start);  // shared edge moved together
+  expect(s.phrases[0].end).toBeCloseTo(3.2, 1);               // left behind, gap opened
 
   h = await handleAt(page, s.phrases[1].end, "e");
   await page.mouse.click(h.x, h.y);
@@ -141,6 +148,18 @@ test("drag phrase edges (a shared edge moves both phrases), select and delete a 
   s = await st(page);
   expect(spans(s).map(([a]) => a)).toEqual([0.5, 9]);
   expect(s.state).toBe("paused");
+});
+
+test("nudging a shared edge: into its own phrase separates, into the neighbour moves both", async ({ page }) => {
+  await load(page);
+  await page.evaluate(() => __pl.setPhrases([{ start: 0, end: 4 }, { start: 4, end: 8 }]));
+  await page.click("#next");
+  await page.click("summary");
+  await page.click("[data-nudge='start,0.05']");
+  expect(spans(await st(page))).toEqual([[0, 4], [4.05, 8]]);
+  await page.click("[data-nudge='start,-0.05']");              // back to touching, not linked any more: stops at 4
+  await page.click("[data-nudge='start,-0.05']");              // now touching again: pushes
+  expect(spans(await st(page))).toEqual([[0, 3.95], [3.95, 8]]);
 });
 
 test("colour and note edit the current phrase and survive a reload", async ({ page }) => {
