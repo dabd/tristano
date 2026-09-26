@@ -18,7 +18,7 @@ A web app (single `index.html`, vanilla JS, no build) for learning jazz solos by
 
 ## Code map (index.html)
 - `S` global state; `store` IndexedDB wrapper; `elEngine` (`<audio>`) and `waEngine` (Web Audio fallback) share `time/seek/play/pause/setRate/ended`.
-- `S.phrases`: `[{start,end,color,note}]` sorted by start, never overlapping; neighbours may touch, and a touching edge moves both (`moveEdge`). Phrase navigation skips the gaps between phrases. `color` is an index into `PAL`. Old v1 split-point markers (`pl:m:<key>`) are converted on first read by `readPhrases()` and kept as a backup.
+- `S.phrases`: `[{start,end,color,note}]` sorted by start, never overlapping; neighbours may touch. A touching edge pushes its neighbour but never pulls it (`moveEdge`): moved into its own phrase it opens a gap, moved into the neighbour it moves both. Phrase navigation skips the gaps between phrases. `color` is an index into `PAL`. Old v1 split-point markers (`pl:m:<key>`) are converted on first read by `readPhrases()` and kept as a backup.
 - `frame()` rAF loop drives loop → sing gap → loop, and all drawing. `setInterval` keeps it alive when hidden.
 - `phrasesChanged()` is the single write path for phrases (localStorage, then a debounced gist sync). Use it.
 - Sync: one gist file `tristano.json` = `{tracks:{<key>:{name,size,duration,phrases,updatedAt}}}`; per track, the newer `updatedAt` wins. Runs on track load, app start, returning to the app, coming online, and 1.5 s after an edit. `tests/sync.spec.js` fakes the GitHub API.
