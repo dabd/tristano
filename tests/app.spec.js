@@ -235,3 +235,27 @@ test("the waveform follows the playhead into gaps and past the last phrase", asy
   expect(v.len).toBe("between phrases");
   expect(errors).toEqual([]);
 });
+
+test("holding a dragged edge at the side scrolls the view, up to the limit of that edge", async ({ page }) => {
+  const errors = await load(page);
+  await page.evaluate(() => __pl.setPhrases([{ start: 4, end: 8 }, { start: 20, end: 24 }]));
+  await page.click("#next"); await page.click("#prev");           // phrase 1 current, playhead at 4
+  const r = await page.locator("#wf").boundingBox(), y = r.y + r.height * 0.6;
+  const win0 = await page.evaluate(() => __pl.win());
+  const h = await handleAt(page, 8, "e");
+  await page.mouse.move(h.x, y); await page.mouse.down();
+  await page.mouse.move(h.x + 10, y); await page.mouse.move(r.x + r.width - 8, y);   // into the right-hand scroll zone
+  await expect.poll(async () => (await st(page)).phrases[0].end, { timeout: 5000 }).toBeGreaterThan(win0[1] + 1);
+  expect((await page.evaluate(() => __pl.win()))[0]).toBeGreaterThan(win0[0]);   // the view moved right
+  // keep holding: the end stops at the start of the next phrase, and the view stops with it in sight
+  await expect.poll(async () => (await st(page)).phrases[0].end, { timeout: 8000 }).toBe(20);
+  await page.waitForTimeout(500);
+  const [w0, w1] = await page.evaluate(() => __pl.win());
+  expect(w0).toBeLessThanOrEqual(20); expect(w1).toBeGreaterThanOrEqual(20);
+  // back to the left side, past the start: the end stops 0.25 s after the start
+  await page.mouse.move(r.x + 2, y);
+  await expect.poll(async () => (await st(page)).phrases[0].end, { timeout: 8000 }).toBe(4.25);
+  await page.mouse.up();
+  expect(spans(await st(page))).toEqual([[4, 4.25], [20, 24]]);
+  expect(errors).toEqual([]);
+});
